@@ -1,0 +1,35 @@
+# Pour ajouter un bloc : copie une entrée ci-dessous, change l'ID et les propriétés,
+# puis fais /customblock reload. Aucun code Java à modifier.
+#
+# Propriétés :
+#   base-material      : matériau de l'item ET du bloc posé (doit être un matériau de bloc)
+#   placed-material    : (optionnel) matériau du bloc posé si différent (hitbox, dureté)
+#   name               : nom affiché, format MiniMessage
+#   lore               : (optionnel) liste de lignes MiniMessage
+#   custom-model-data  : valeur lue par ton resource pack pour afficher la texture
+#   drop-self          : true = le bloc se récupère en le cassant
+
+blocks:
+  ruby_block:
+    base-material: REDSTONE_BLOCK
+    name: "<gradient:#ff0044:#ff8899><bold>Bloc de Rubis</bold></gradient>"
+    lore:
+      - "<gray>Un bloc précieux et rare."
+      - "<dark_gray>CustomBlock"
+    custom-model-data: 1001
+    drop-self: true
+
+  sapphire_block:
+    base-material: LAPIS_BLOCK
+    name: "<gradient:#0044ff:#66ccff><bold>Bloc de Saphir</bold></gradient>"
+    lore:
+      - "<gray>Brille d'un bleu profond."
+    custom-model-data: 1002
+    drop-self: true
+
+  marble_bricks:
+    base-material: QUARTZ_BRICKS
+    placed-material: STONE_BRICKS
+    name: "<white>Briques de marbre"
+    custom-model-data: 1003
+    drop-self: true

@@ -1,0 +1,18 @@
+name: CustomBlock
+version: '${version}'
+main: fr.customblock.Main
+api-version: '1.21'
+description: Blocs et textures personnalisés pilotés par configuration.
+authors: [CustomBlock]
+
+commands:
+  customblock:
+    description: Gestion des blocs personnalisés
+    usage: /customblock <give|list|reload>
+    aliases: [cb]
+    permission: customblock.admin
+
+permissions:
+  customblock.admin:
+    description: Accès aux commandes de CustomBlock
+    default: op
