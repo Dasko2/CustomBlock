@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 /**
@@ -35,9 +36,19 @@ import java.util.regex.Pattern;
 public final class CustomBlockManager {
 
     /**
+     * Un drop : un objet custom (ID) ou vanilla (matériau), une quantité (min à max) et une chance en %.
+     */
+    public record DropDefinition(String item, int min, int max, double chance) {
+    }
+
+    /**
      * Définition immuable d'un bloc, construite depuis la configuration.
      *
-     * @param texture nom du fichier PNG dans plugins/CustomBlock/textures/ (peut être null)
+     * @param textures  fichier PNG de chaque face (up, down, north, south, east, west) ; vide = pas de texture
+     * @param hardness  dureté (null = celle du matériau posé, 0 = instantané, négatif = incassable)
+     * @param tool      outil requis pour obtenir les drops (PICKAXE, AXE, SHOVEL, HOE, SWORD) ou null
+     * @param minTier   niveau minimal de l'outil (0 bois/or, 1 pierre/cuivre, 2 fer, 3 diamant, 4 netherite) ou -1
+     * @param drops     objets lâchés à la casse
      */
     public record BlockDefinition(
             String id,
@@ -45,22 +56,28 @@ public final class CustomBlockManager {
             Material placedMaterial,
             String name,
             List<String> lore,
-            String texture,
+            Map<String, String> textures,
             int customModelData,
-            boolean dropSelf
+            Double hardness,
+            String tool,
+            int minTier,
+            List<DropDefinition> drops
     ) {
     }
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final Pattern VALID_ID = Pattern.compile("[a-z0-9_.-]+");
+    private static final Set<String> TOOLS = Set.of("PICKAXE", "AXE", "SHOVEL", "HOE", "SWORD");
 
     private final Main plugin;
+    private final CustomItemManager itemManager;
     private final NamespacedKey idKey;
     private final Map<String, BlockDefinition> definitions = new LinkedHashMap<>();
     private final Set<Material> trackedMaterials = EnumSet.noneOf(Material.class);
 
-    public CustomBlockManager(Main plugin) {
+    public CustomBlockManager(Main plugin, CustomItemManager itemManager) {
         this.plugin = plugin;
+        this.itemManager = itemManager;
         this.idKey = new NamespacedKey(plugin, "block_id");
     }
 
@@ -102,16 +119,157 @@ public final class CustomBlockManager {
                 }
             }
 
-            String name = s.getString("name", "<white>" + id);
-            List<String> lore = s.getStringList("lore");
-            String texture = s.getString("texture");
-            if (texture != null && texture.isBlank()) texture = null;
-            int cmd = s.getInt("custom-model-data", 0);
-            boolean dropSelf = s.getBoolean("drop-self", true);
+            Double hardness = s.contains("hardness") ? s.getDouble("hardness") : null;
+            if (hardness != null && hardness != 0 && placed.getHardness() <= 0) {
+                plugin.getLogger().warning("[" + id + "] hardness ignorée : le matériau posé " + placed.name()
+                        + " a une dureté fixe. Choisis un placed-material minable (STONE, OAK_PLANKS, DIRT...).");
+                hardness = null;
+            }
 
-            definitions.put(id, new BlockDefinition(id, base, placed, name, lore, texture, cmd, dropSelf));
+            String tool = null;
+            String toolRaw = s.getString("tool");
+            if (toolRaw != null && !toolRaw.isBlank() && !toolRaw.equalsIgnoreCase("NONE")) {
+                String normalized = toolRaw.trim().toUpperCase(Locale.ROOT);
+                if (TOOLS.contains(normalized)) {
+                    tool = normalized;
+                } else {
+                    plugin.getLogger().warning("[" + id + "] tool invalide '" + toolRaw + "' (PICKAXE, AXE, SHOVEL, HOE, SWORD ou NONE) : ignoré.");
+                }
+            }
+
+            int minTier = -1;
+            String tierRaw = s.getString("min-tier");
+            if (tierRaw != null && !tierRaw.isBlank() && !tierRaw.equalsIgnoreCase("NONE")) {
+                minTier = parseTier(tierRaw);
+                if (minTier < 0) {
+                    plugin.getLogger().warning("[" + id + "] min-tier invalide '" + tierRaw + "' (WOOD, STONE, IRON, DIAMOND, NETHERITE ou NONE) : ignoré.");
+                }
+            }
+
+            definitions.put(id, new BlockDefinition(
+                    id,
+                    base,
+                    placed,
+                    s.getString("name", "<white>" + id),
+                    s.getStringList("lore"),
+                    parseFaces(id, s),
+                    s.getInt("custom-model-data", 0),
+                    hardness,
+                    tool,
+                    minTier,
+                    parseDrops(id, s)));
             trackedMaterials.add(placed);
         }
+    }
+
+    /** Vérifie, une fois blocs et objets chargés, que chaque drop pointe vers un objet existant. */
+    public void validateDrops() {
+        for (BlockDefinition def : definitions.values()) {
+            for (DropDefinition drop : def.drops()) {
+                if (createStack(drop.item(), 1) == null) {
+                    plugin.getLogger().warning("[" + def.id() + "] drop inconnu : '" + drop.item()
+                            + "' (ni objet custom, ni matériau vanilla).");
+                }
+            }
+        }
+    }
+
+    private Map<String, String> parseFaces(String id, ConfigurationSection s) {
+        ConfigurationSection t = s.getConfigurationSection("textures");
+        String all = first(t == null ? null : t.getString("all"), s.getString("texture"));
+
+        Map<String, String> faces = new LinkedHashMap<>();
+        faces.put("up", first(get(t, "up"), get(t, "top"), get(t, "end"), all));
+        faces.put("down", first(get(t, "down"), get(t, "bottom"), get(t, "end"), all));
+        faces.put("north", first(get(t, "north"), get(t, "side"), all));
+        faces.put("south", first(get(t, "south"), get(t, "side"), all));
+        faces.put("east", first(get(t, "east"), get(t, "side"), all));
+        faces.put("west", first(get(t, "west"), get(t, "side"), all));
+
+        boolean any = faces.values().stream().anyMatch(v -> v != null);
+        boolean complete = faces.values().stream().allMatch(v -> v != null);
+        if (!any) return Map.of();
+        if (!complete) {
+            plugin.getLogger().warning("[" + id + "] textures incomplètes : il faut les 6 faces (all, ou top/bottom/side, ou up/down/north/south/east/west). Texture ignorée.");
+            return Map.of();
+        }
+        return Collections.unmodifiableMap(faces);
+    }
+
+    private static String get(ConfigurationSection section, String key) {
+        return section == null ? null : section.getString(key);
+    }
+
+    private static String first(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) return value;
+        }
+        return null;
+    }
+
+    private List<DropDefinition> parseDrops(String id, ConfigurationSection s) {
+        List<DropDefinition> drops = new ArrayList<>();
+
+        if (!s.contains("drops")) {
+            if (s.getBoolean("drop-self", true)) {
+                drops.add(new DropDefinition(id, 1, 1, 100.0));
+            }
+            return drops;
+        }
+
+        for (Map<?, ?> entry : s.getMapList("drops")) {
+            Object item = entry.get("item");
+            if (item == null) {
+                plugin.getLogger().warning("[" + id + "] un drop n'a pas de champ 'item' : ignoré.");
+                continue;
+            }
+            int[] range = parseRange(entry.containsKey("amount") ? String.valueOf(entry.get("amount")) : "1");
+            double chance = 100.0;
+            Object chanceRaw = entry.get("chance");
+            if (chanceRaw instanceof Number number) {
+                chance = number.doubleValue();
+            } else if (chanceRaw != null) {
+                try {
+                    chance = Double.parseDouble(String.valueOf(chanceRaw));
+                } catch (NumberFormatException ignored) {
+                    // garde 100 %
+                }
+            }
+            drops.add(new DropDefinition(String.valueOf(item).trim(), range[0], range[1], chance));
+        }
+        return drops;
+    }
+
+    private static int[] parseRange(String raw) {
+        String value = raw.trim();
+        try {
+            int dash = value.indexOf('-', 1);
+            if (dash > 0) {
+                int min = Integer.parseInt(value.substring(0, dash).trim());
+                int max = Integer.parseInt(value.substring(dash + 1).trim());
+                return new int[]{min, Math.max(min, max)};
+            }
+            int single = Integer.parseInt(value);
+            return new int[]{single, single};
+        } catch (NumberFormatException ex) {
+            return new int[]{1, 1};
+        }
+    }
+
+    private static int parseTier(String raw) {
+        return switch (raw.trim().toUpperCase(Locale.ROOT)) {
+            case "WOOD", "WOODEN", "GOLD", "GOLDEN" -> 0;
+            case "STONE", "COPPER" -> 1;
+            case "IRON" -> 2;
+            case "DIAMOND" -> 3;
+            case "NETHERITE" -> 4;
+            default -> -1;
+        };
+    }
+
+    private static int toolTier(String materialName) {
+        int underscore = materialName.indexOf('_');
+        return underscore < 0 ? -1 : parseTier(materialName.substring(0, underscore));
     }
 
     public Map<String, BlockDefinition> getDefinitions() {
@@ -129,8 +287,39 @@ public final class CustomBlockManager {
         return getDefinition(id);
     }
 
+    /** Retourne la définition du bloc custom posé à cet endroit, ou null. */
+    public BlockDefinition getDefinitionAt(Block block) {
+        ItemDisplay display = findDisplay(block);
+        if (display == null) return null;
+        return getDefinition(display.getPersistentDataContainer().get(idKey, PersistentDataType.STRING));
+    }
+
     public boolean isTracked(Material material) {
         return trackedMaterials.contains(material);
+    }
+
+    /** true si l'ID correspond à un bloc ou un objet custom. */
+    public boolean isCustomId(String key) {
+        return getDefinition(key) != null || itemManager.getDefinition(key) != null;
+    }
+
+    /**
+     * Crée un item à partir d'une clé : ID de bloc custom, ID d'objet custom, ou matériau vanilla.
+     *
+     * @return l'item, ou null si la clé est inconnue
+     */
+    public ItemStack createStack(String key, int amount) {
+        BlockDefinition block = getDefinition(key);
+        if (block != null) return createItem(block, amount);
+
+        CustomItemManager.ItemDefinition item = itemManager.getDefinition(key);
+        if (item != null) return itemManager.createItem(item, amount);
+
+        Material material = Material.matchMaterial(key);
+        if (material != null && material.isItem() && !material.isAir()) {
+            return new ItemStack(material, amount);
+        }
+        return null;
     }
 
     /** Construit l'item d'un bloc : nom MiniMessage, lore, modèle du resource pack et identifiant caché. */
@@ -149,7 +338,7 @@ public final class CustomBlockManager {
         }
 
         // Modèle généré automatiquement dans le resource pack : <namespace>:<id>
-        if (def.texture() != null) {
+        if (!def.textures().isEmpty()) {
             meta.setItemModel(new NamespacedKey(plugin, def.id()));
         }
 
@@ -204,23 +393,47 @@ public final class CustomBlockManager {
         return findDisplay(block) != null;
     }
 
+    /** true si l'outil respecte le type et le niveau demandés par le bloc (null = aucune vérification). */
+    private boolean toolAllows(BlockDefinition def, ItemStack tool) {
+        if (tool == null) return true;
+        if (def.tool() == null && def.minTier() < 0) return true;
+
+        String name = tool.getType().name();
+        if (def.tool() != null && !name.endsWith("_" + def.tool())) return false;
+        return def.minTier() < 0 || toolTier(name) >= def.minTier();
+    }
+
     /**
-     * Retire l'entité d'affichage d'un bloc custom et fait éventuellement tomber l'item.
+     * Retire l'entité d'affichage d'un bloc custom et fait éventuellement tomber ses drops.
      * Ne modifie pas le bloc lui-même.
      *
+     * @param tool outil utilisé pour casser (null = pas de vérification, ex. explosion)
      * @return true si le bloc était un bloc custom
      */
-    public boolean removeBlock(Block block, boolean dropItem) {
+    public boolean removeBlock(Block block, ItemStack tool, boolean dropItems) {
         ItemDisplay display = findDisplay(block);
         if (display == null) return false;
 
-        String id = display.getPersistentDataContainer().get(idKey, PersistentDataType.STRING);
-        BlockDefinition def = getDefinition(id);
+        BlockDefinition def = getDefinition(display.getPersistentDataContainer().get(idKey, PersistentDataType.STRING));
         display.remove();
 
-        if (dropItem && def != null && def.dropSelf()) {
+        if (dropItems && def != null && toolAllows(def, tool)) {
             Location center = block.getLocation().add(0.5, 0.5, 0.5);
-            block.getWorld().dropItemNaturally(center, createItem(def, 1));
+            ThreadLocalRandom random = ThreadLocalRandom.current();
+
+            for (DropDefinition drop : def.drops()) {
+                if (drop.chance() < 100.0 && random.nextDouble() * 100.0 >= drop.chance()) continue;
+
+                int amount = drop.min() == drop.max() ? drop.min() : random.nextInt(drop.min(), drop.max() + 1);
+                while (amount > 0) {
+                    ItemStack stack = createStack(drop.item(), 1);
+                    if (stack == null) break;
+                    int part = Math.min(amount, stack.getMaxStackSize());
+                    stack.setAmount(part);
+                    block.getWorld().dropItemNaturally(center, stack);
+                    amount -= part;
+                }
+            }
         }
         return true;
     }

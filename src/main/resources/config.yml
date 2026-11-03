@@ -1,88 +1,159 @@
 # ============================================================
 #  CustomBlock
 #
-#  Ajouter un bloc :
-#    1. Dépose ta texture (PNG, ex. 16x16) dans plugins/CustomBlock/textures/
-#    2. Ajoute une entrée dans "blocks" avec le nom du fichier dans "texture"
+#  Ajouter un bloc ou un objet :
+#    1. Dépose tes textures PNG dans plugins/CustomBlock/textures/
+#    2. Ajoute une entrée dans "blocks" ou "items" avec les noms de fichiers
 #    3. Fais /customblock reload
 #  Le resource pack est généré automatiquement et envoyé aux joueurs.
 # ============================================================
 
-# Propriétés d'un bloc :
-#   base-material      : matériau de l'item ET du bloc posé (doit être un matériau de bloc)
-#   placed-material    : (optionnel) matériau du bloc posé si différent (hitbox, dureté)
-#   name               : nom affiché, format MiniMessage
-#   lore               : (optionnel) liste de lignes MiniMessage
-#   texture            : nom du fichier PNG dans plugins/CustomBlock/textures/
-#   custom-model-data  : (optionnel) valeur ajoutée à l'item, utile pour d'autres plugins
-#   drop-self          : true = le bloc se récupère en le cassant
+# ------------------------------------------------------------
+#  BLOCS
+#
+#  base-material      : matériau de l'item ET du bloc posé (doit être un matériau de bloc)
+#  placed-material    : (optionnel) matériau réellement posé : sa hitbox et sa dureté de base.
+#                       Choisis-en un cohérent avec l'outil voulu (STONE pour une pioche,
+#                       OAK_PLANKS pour une hache, DIRT pour une pelle).
+#  name / lore        : MiniMessage
+#
+#  Textures (une seule des 3 formes) :
+#    texture: fichier.png                      -> même texture sur les 6 faces
+#    textures: { top, bottom, side }           -> dessus, dessous, 4 côtés
+#    textures: { up, down, north, south, east, west }   -> chaque face séparément
+#    (on peut mélanger : "side" puis "north" pour changer une seule face)
+#
+#  hardness           : (optionnel) dureté. Stone = 1.5, obsidienne = 50, dirt = 0.5.
+#                       0 = casse instantanée, négatif = incassable.
+#  tool               : (optionnel) PICKAXE, AXE, SHOVEL, HOE, SWORD ou NONE.
+#                       Sans le bon outil : le bloc se casse mais ne lâche rien.
+#  min-tier           : (optionnel) niveau minimal de l'outil : WOOD, STONE, IRON, DIAMOND, NETHERITE.
+#  drops              : (optionnel) liste d'objets lâchés. "item" = ID d'un bloc/objet custom OU matériau vanilla.
+#                       amount : quantité fixe (2) ou plage (1-3). chance : % (défaut 100).
+#                       Sans "drops", le bloc se lâche lui-même.
+#  recipe             : (optionnel) craft, voir la section "recipe" plus bas.
+# ------------------------------------------------------------
 blocks:
+  ruby_ore:
+    base-material: DIAMOND_ORE
+    placed-material: STONE
+    name: "<gradient:#ff0044:#ff8899><bold>Minerai de Rubis</bold></gradient>"
+    textures:
+      all: ruby_ore.png
+    hardness: 4.0
+    tool: PICKAXE
+    min-tier: IRON
+    drops:
+      - item: ruby          # objet custom défini dans "items"
+        amount: 1-3
+      - item: DIAMOND       # item vanilla, 10 % de chance
+        amount: 1
+        chance: 10
+
   ruby_block:
     base-material: REDSTONE_BLOCK
+    placed-material: STONE
     name: "<gradient:#ff0044:#ff8899><bold>Bloc de Rubis</bold></gradient>"
     lore:
       - "<gray>Un bloc précieux et rare."
-      - "<dark_gray>CustomBlock"
-    texture: ruby_block.png
-    custom-model-data: 1001
-    drop-self: true
-
-  sapphire_block:
-    base-material: LAPIS_BLOCK
-    name: "<gradient:#0044ff:#66ccff><bold>Bloc de Saphir</bold></gradient>"
-    lore:
-      - "<gray>Brille d'un bleu profond."
-    texture: sapphire_block.png
-    custom-model-data: 1002
-    drop-self: true
+    # Dessus, dessous et côtés différents
+    textures:
+      top: ruby_block_top.png
+      bottom: ruby_block_bottom.png
+      side: ruby_block_side.png
+    hardness: 5.0
+    tool: PICKAXE
+    min-tier: IRON
+    recipe:
+      type: shaped
+      shape:
+        - "RRR"
+        - "RRR"
+        - "RRR"
+      ingredients:
+        R: ruby
 
   marble_bricks:
     base-material: QUARTZ_BRICKS
     placed-material: STONE_BRICKS
     name: "<white>Briques de marbre"
     texture: marble_bricks.png
-    custom-model-data: 1003
-    drop-self: true
+    hardness: 2.0
+    tool: PICKAXE
+    recipe:
+      type: shaped
+      amount: 4
+      shape:
+        - "QQ"
+        - "QQ"
+      ingredients:
+        Q: QUARTZ_BLOCK
 
-# ============================================================
-#  Objets : outils, armes, armures, objets simples
+# ------------------------------------------------------------
+#  OBJETS : outils, armes, armures, objets simples
 #
-#  Propriétés :
-#    material        : matériau de base (ex. DIAMOND_SWORD, NETHERITE_HELMET, PAPER). Il définit le type
-#                      d'objet : un pic reste un pic, un casque se porte sur la tête.
-#    name / lore     : MiniMessage
-#    texture         : icône PNG dans plugins/CustomBlock/textures/
-#    armor-texture   : (armures) préfixe des textures portées. Dépose <préfixe>_layer_1.png
-#                      (casque, plastron, bottes) et <préfixe>_layer_2.png (jambières) dans textures/.
-#                      Utilise le même préfixe pour toutes les pièces d'un set.
-#    durability      : (optionnel) durabilité maximale
-#    unbreakable     : (optionnel) true = incassable
-#    attributes      : (optionnel) attributs. ATTENTION : ils remplacent ceux du matériau d'origine,
-#                      donc indique tout ce que l'objet doit avoir (ex. dégâts ET vitesse d'attaque).
-#                      attack-damage et attack-speed = valeurs totales affichées en jeu.
-#                      Autres : armor, armor-toughness, knockback-resistance, max-health,
-#                      movement-speed, attack-knockback, luck, ...
-# ============================================================
+#  material        : matériau de base (DIAMOND_SWORD, NETHERITE_HELMET, PAPER...).
+#                    Il définit le type : une pioche reste une pioche, un casque se porte sur la tête.
+#  name / lore     : MiniMessage
+#  texture         : icône (inventaire, au sol, en cadre)
+#  held-texture    : (optionnel) texture quand l'objet est TENU ou PORTÉ à la main.
+#                    Sans elle, "texture" est utilisée partout.
+#  armor-texture   : (armures) préfixe des textures portées. Dépose <préfixe>_layer_1.png
+#                    (casque, plastron, bottes) et <préfixe>_layer_2.png (jambières).
+#                    Même préfixe pour toutes les pièces d'un set.
+#  durability      : (optionnel) durabilité maximale
+#  unbreakable     : (optionnel) true = incassable
+#  attributes      : (optionnel) attributs. ATTENTION : ils remplacent ceux du matériau d'origine.
+#                    attack-damage / attack-speed = valeurs totales affichées en jeu.
+#                    Armure : armor (protection), armor-toughness (solidité), knockback-resistance (0 à 1).
+#                    Autres : max-health, movement-speed, attack-knockback, luck, ...
+#  recipe          : (optionnel) craft, voir plus bas.
+# ------------------------------------------------------------
 items:
+  ruby:
+    material: AMETHYST_SHARD
+    name: "<red>Rubis"
+    texture: ruby.png
+
   ruby_sword:
     material: DIAMOND_SWORD
     name: "<gradient:#ff0044:#ff8899><bold>Épée de Rubis</bold></gradient>"
     lore:
       - "<gray>Forgée dans un rubis pur."
-    texture: ruby_sword.png
+    texture: ruby_sword.png               # icône dans l'inventaire
+    held-texture: ruby_sword_held.png     # texture en main
     durability: 2500
     attributes:
       attack-damage: 9
       attack-speed: 1.6
+    recipe:
+      type: shaped
+      shape:
+        - " R "
+        - " R "
+        - " S "
+      ingredients:
+        R: ruby
+        S: STICK
 
   ruby_pickaxe:
     material: DIAMOND_PICKAXE
     name: "<red>Pioche de Rubis"
     texture: ruby_pickaxe.png
+    held-texture: ruby_pickaxe_held.png
     durability: 2000
     attributes:
       attack-damage: 5
       attack-speed: 1.2
+    recipe:
+      type: shaped
+      shape:
+        - "RRR"
+        - " S "
+        - " S "
+      ingredients:
+        R: ruby
+        S: STICK
 
   ruby_helmet:
     material: DIAMOND_HELMET
@@ -93,6 +164,13 @@ items:
     attributes:
       armor: 3
       armor-toughness: 2
+    recipe:
+      type: shaped
+      shape:
+        - "RRR"
+        - "R R"
+      ingredients:
+        R: ruby
 
   ruby_chestplate:
     material: DIAMOND_CHESTPLATE
@@ -103,6 +181,14 @@ items:
     attributes:
       armor: 8
       armor-toughness: 2
+    recipe:
+      type: shaped
+      shape:
+        - "R R"
+        - "RRR"
+        - "RRR"
+      ingredients:
+        R: ruby
 
   ruby_leggings:
     material: DIAMOND_LEGGINGS
@@ -113,6 +199,14 @@ items:
     attributes:
       armor: 6
       armor-toughness: 2
+    recipe:
+      type: shaped
+      shape:
+        - "RRR"
+        - "R R"
+        - "R R"
+      ingredients:
+        R: ruby
 
   ruby_boots:
     material: DIAMOND_BOOTS
@@ -123,13 +217,38 @@ items:
     attributes:
       armor: 3
       armor-toughness: 2
+    recipe:
+      type: shaped
+      shape:
+        - "R R"
+        - "R R"
+      ingredients:
+        R: ruby
+
+# ------------------------------------------------------------
+#  CRAFTS (sous-section "recipe" d'un bloc ou d'un objet)
+#
+#  type         : shaped (forme précise) ou shapeless (sans forme)
+#  amount       : (optionnel) quantité obtenue (défaut 1)
+#  shape        : (shaped) 1 à 3 lignes de 1 à 3 caractères, espace = case vide
+#  ingredients  : (shaped) lettre -> ingrédient
+#                 (shapeless) simple liste d'ingrédients
+#  Un ingrédient est un ID de bloc/objet custom (ex. ruby) ou un matériau vanilla (ex. STICK).
+#
+#  Exemple sans forme :
+#    recipe:
+#      type: shapeless
+#      ingredients: [ruby, ruby, GOLD_INGOT]
+# ------------------------------------------------------------
 
 # Génération et envoi du resource pack
 resource-pack:
   enabled: true
-  # Numéro de format de ressources de ta version de Minecraft.
-  # Si le client affiche "pack conçu pour une autre version", ajuste cette valeur.
-  pack-format: 84
+  # "auto" = le plugin lit le numéro de format dans ton serveur (recommandé).
+  # Tu peux aussi mettre un nombre fixe, ex. 84.
+  pack-format: auto
+  # Utilisé uniquement si "auto" échoue
+  pack-format-fallback: 84
   description: "Textures CustomBlock"
   # true = les joueurs qui refusent le pack sont expulsés
   required: false

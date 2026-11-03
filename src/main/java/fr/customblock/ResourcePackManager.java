@@ -1,5 +1,7 @@
 package fr.customblock;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpServer;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
@@ -10,6 +12,8 @@ import org.bukkit.entity.Player;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -18,7 +22,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -82,7 +88,7 @@ public final class ResourcePackManager {
             return;
         }
 
-        int format = cfg == null ? 84 : cfg.getInt("pack-format", 84);
+        int format = resolvePackFormat(cfg);
         String description = cfg == null ? "Textures CustomBlock" : cfg.getString("description", "Textures CustomBlock");
 
         byte[] bytes;
@@ -92,41 +98,82 @@ public final class ResourcePackManager {
             try (ZipOutputStream zip = new ZipOutputStream(buffer)) {
                 addEntry(zip, "pack.mcmeta", mcmeta(format, description).getBytes(StandardCharsets.UTF_8));
 
+                // ---- Blocs : un modèle cube dont chaque face peut avoir sa propre texture ----
                 for (CustomBlockManager.BlockDefinition def : definitions) {
-                    if (def.texture() == null) continue;
-
-                    File file = resolveFile(def.id(), def.texture());
-                    if (file == null) continue;
+                    if (def.textures().isEmpty()) continue;
 
                     String id = def.id();
-                    addEntry(zip, "assets/" + namespace + "/textures/block/" + id + ".png",
-                            Files.readAllBytes(file.toPath()));
+                    Map<String, String> resourceByFile = new LinkedHashMap<>();
+                    Map<String, String> resourceByFace = new LinkedHashMap<>();
+                    boolean valid = true;
+
+                    for (Map.Entry<String, String> face : def.textures().entrySet()) {
+                        String fileName = face.getValue();
+                        String resource = resourceByFile.get(fileName);
+                        if (resource == null) {
+                            File file = resolveFile(id, fileName);
+                            if (file == null) {
+                                valid = false;
+                                break;
+                            }
+                            resource = id + "_" + resourceByFile.size();
+                            resourceByFile.put(fileName, resource);
+                            addEntry(zip, "assets/" + namespace + "/textures/block/" + resource + ".png",
+                                    Files.readAllBytes(file.toPath()));
+                        }
+                        resourceByFace.put(face.getKey(), resource);
+                    }
+                    if (!valid) continue;
+
+                    StringBuilder textures = new StringBuilder();
+                    textures.append("\"particle\":\"").append(namespace).append(":block/").append(resourceByFace.get("north")).append("\"");
+                    for (String face : new String[]{"down", "up", "north", "south", "east", "west"}) {
+                        textures.append(",\"").append(face).append("\":\"")
+                                .append(namespace).append(":block/").append(resourceByFace.get(face)).append("\"");
+                    }
                     addEntry(zip, "assets/" + namespace + "/models/block/" + id + ".json",
-                            ("{\"parent\":\"minecraft:block/cube_all\",\"textures\":{\"all\":\""
-                                    + namespace + ":block/" + id + "\"}}").getBytes(StandardCharsets.UTF_8));
+                            ("{\"parent\":\"minecraft:block/cube\",\"textures\":{" + textures + "}}")
+                                    .getBytes(StandardCharsets.UTF_8));
                     addEntry(zip, "assets/" + namespace + "/items/" + id + ".json",
                             ("{\"model\":{\"type\":\"minecraft:model\",\"model\":\""
                                     + namespace + ":block/" + id + "\"}}").getBytes(StandardCharsets.UTF_8));
                     count++;
                 }
 
-                // Outils, armes, armures et objets simples
+                // ---- Objets : icône, texture en main et armure portée ----
                 Set<String> armorDone = new HashSet<>();
                 for (CustomItemManager.ItemDefinition item : items) {
                     String id = item.id();
+                    String parent = isHandheld(item.material()) ? "minecraft:item/handheld" : "minecraft:item/generated";
 
                     if (item.texture() != null) {
                         File icon = resolveFile(id, item.texture());
                         if (icon != null) {
-                            String parent = isHandheld(item.material()) ? "minecraft:item/handheld" : "minecraft:item/generated";
                             addEntry(zip, "assets/" + namespace + "/textures/item/" + id + ".png",
                                     Files.readAllBytes(icon.toPath()));
                             addEntry(zip, "assets/" + namespace + "/models/item/" + id + ".json",
-                                    ("{\"parent\":\"" + parent + "\",\"textures\":{\"layer0\":\""
-                                            + namespace + ":item/" + id + "\"}}").getBytes(StandardCharsets.UTF_8));
+                                    itemModel(parent, id).getBytes(StandardCharsets.UTF_8));
+
+                            String itemDefinition = "{\"model\":{\"type\":\"minecraft:model\",\"model\":\""
+                                    + namespace + ":item/" + id + "\"}}";
+
+                            File held = (item.heldTexture() == null || item.heldTexture().equals(item.texture()))
+                                    ? null : resolveFile(id, item.heldTexture());
+                            if (held != null) {
+                                String heldId = id + "_held";
+                                addEntry(zip, "assets/" + namespace + "/textures/item/" + heldId + ".png",
+                                        Files.readAllBytes(held.toPath()));
+                                addEntry(zip, "assets/" + namespace + "/models/item/" + heldId + ".json",
+                                        itemModel(parent, heldId).getBytes(StandardCharsets.UTF_8));
+                                // Icône dans l'inventaire / au sol / en cadre ; texture "en main" partout ailleurs
+                                itemDefinition = "{\"model\":{\"type\":\"minecraft:select\","
+                                        + "\"property\":\"minecraft:display_context\","
+                                        + "\"cases\":[{\"when\":[\"gui\",\"ground\",\"fixed\"],"
+                                        + "\"model\":{\"type\":\"minecraft:model\",\"model\":\"" + namespace + ":item/" + id + "\"}}],"
+                                        + "\"fallback\":{\"type\":\"minecraft:model\",\"model\":\"" + namespace + ":item/" + heldId + "\"}}}";
+                            }
                             addEntry(zip, "assets/" + namespace + "/items/" + id + ".json",
-                                    ("{\"model\":{\"type\":\"minecraft:model\",\"model\":\""
-                                            + namespace + ":item/" + id + "\"}}").getBytes(StandardCharsets.UTF_8));
+                                    itemDefinition.getBytes(StandardCharsets.UTF_8));
                             count++;
                         }
                     }
@@ -184,7 +231,7 @@ public final class ResourcePackManager {
         }
 
         ready = true;
-        plugin.getLogger().info("Resource pack généré (" + count + " texture(s)) : " + packFile.getPath());
+        plugin.getLogger().info("Resource pack généré (" + count + " modèle(s), format " + format + ") : " + packFile.getPath());
         plugin.getLogger().info("URL envoyée aux joueurs : " + getUrl());
         if (isLocalHost(cfg)) {
             plugin.getLogger().warning("resource-pack.self-host.host vaut 127.0.0.1 : seuls les joueurs sur la même machine pourront télécharger le pack. Mets l'IP publique ou le domaine du serveur.");
@@ -228,6 +275,47 @@ public final class ResourcePackManager {
         return "http://" + host + ":" + port + "/pack.zip";
     }
 
+    /**
+     * Numéro de format du pack : "auto" le lit dans le serveur lui-même (version.json),
+     * sinon le nombre indiqué dans la config est utilisé.
+     */
+    private int resolvePackFormat(ConfigurationSection cfg) {
+        int fallback = cfg == null ? 84 : cfg.getInt("pack-format-fallback", 84);
+        String raw = cfg == null ? "auto" : cfg.getString("pack-format", "auto");
+
+        if (raw != null && !raw.equalsIgnoreCase("auto")) {
+            try {
+                return Integer.parseInt(raw.trim());
+            } catch (NumberFormatException ex) {
+                plugin.getLogger().warning("resource-pack.pack-format invalide ('" + raw + "') : détection automatique.");
+            }
+        }
+
+        int detected = detectPackFormat();
+        if (detected > 0) {
+            return detected;
+        }
+        plugin.getLogger().warning("Format du pack non détectable automatiquement : utilisation de pack-format-fallback (" + fallback + ").");
+        return fallback;
+    }
+
+    private int detectPackFormat() {
+        try (InputStream in = Bukkit.class.getResourceAsStream("/version.json")) {
+            if (in == null) return -1;
+
+            JsonObject root = JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject packVersion = root.getAsJsonObject("pack_version");
+            if (packVersion == null) return -1;
+
+            // Versions récentes : resource_major / resource_minor ; anciennes : resource
+            if (packVersion.has("resource_major")) return packVersion.get("resource_major").getAsInt();
+            if (packVersion.has("resource")) return packVersion.get("resource").getAsInt();
+        } catch (Exception ex) {
+            plugin.getLogger().fine("Lecture de version.json impossible : " + ex.getMessage());
+        }
+        return -1;
+    }
+
     private boolean isLocalHost(ConfigurationSection cfg) {
         if (cfg == null) return true;
         String external = cfg.getString("external-url", "");
@@ -241,6 +329,10 @@ public final class ResourcePackManager {
         return name.endsWith("_SWORD") || name.endsWith("_AXE") || name.endsWith("_PICKAXE")
                 || name.endsWith("_SHOVEL") || name.endsWith("_HOE")
                 || name.equals("MACE") || name.equals("STICK") || name.equals("BLAZE_ROD");
+    }
+
+    private String itemModel(String parent, String textureId) {
+        return "{\"parent\":\"" + parent + "\",\"textures\":{\"layer0\":\"" + namespace + ":item/" + textureId + "\"}}";
     }
 
     private File resolveFile(String ownerId, String name) {

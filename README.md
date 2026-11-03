@@ -1,68 +1,103 @@
 # CustomBlock
 
-Plugin Paper (Minecraft 26.1.2, Java 25) pour ajouter des blocs et textures personnalisés, sans écrire de code.
+Plugin Paper (Minecraft 26.1.2, Java 25) pour ajouter blocs, outils, armes et armures personnalisés,
+sans écrire de code. Tout se règle dans `config.yml` ; les textures se déposent dans `plugins/CustomBlock/textures/`.
 
-## Ajouter un bloc
+Après toute modification : `/customblock reload`. Le plugin régénère le resource pack
+(`plugins/CustomBlock/generated/resource-pack.zip`), le renvoie aux joueurs et recharge les crafts.
 
-1. Dépose ta texture PNG (ex. 16x16) dans `plugins/CustomBlock/textures/`.
-2. Ajoute une entrée dans `plugins/CustomBlock/config.yml` :
+## Blocs
 
-   ```yaml
-   blocks:
-     mon_bloc:
-       base-material: STONE_BRICKS
-       name: "<gold>Mon bloc"
-       texture: mon_bloc.png
-   ```
+```yaml
+blocks:
+  ruby_block:
+    base-material: REDSTONE_BLOCK
+    placed-material: STONE        # hitbox et dureté de base du bloc posé
+    name: "<red>Bloc de Rubis"
+    textures:                     # chaque face peut être différente
+      top: ruby_top.png
+      bottom: ruby_bottom.png
+      side: ruby_side.png
+    hardness: 5.0                 # dureté (0 = instantané, négatif = incassable)
+    tool: PICKAXE                 # outil requis pour obtenir les drops
+    min-tier: IRON                # niveau minimal de l'outil
+    drops:
+      - item: ruby                # objet custom
+        amount: 1-3
+      - item: DIAMOND             # ou item vanilla
+        chance: 10                # en %
+```
 
-3. Fais `/customblock reload`.
+Textures : `texture: x.png` (6 faces identiques), `top/bottom/side`, ou `up/down/north/south/east/west`.
 
-## Ajouter un outil, une arme ou une armure
-
-Même principe, dans la section `items:` de la config :
+## Objets (outils, armes, armures)
 
 ```yaml
 items:
   ruby_sword:
     material: DIAMOND_SWORD
     name: "<red>Épée de Rubis"
-    texture: ruby_sword.png        # icône
+    texture: ruby_sword.png            # icône (inventaire, au sol)
+    held-texture: ruby_sword_held.png  # texture en main
     durability: 2500
     attributes:
       attack-damage: 9
       attack-speed: 1.6
 
-  ruby_helmet:
-    material: DIAMOND_HELMET
-    name: "<red>Casque de Rubis"
-    texture: ruby_helmet.png       # icône
-    armor-texture: ruby            # textures portées : ruby_layer_1.png et ruby_layer_2.png
+  ruby_chestplate:
+    material: DIAMOND_CHESTPLATE
+    texture: ruby_chestplate.png
+    armor-texture: ruby                # textures portées : ruby_layer_1.png + ruby_layer_2.png
+    durability: 800
     attributes:
-      armor: 3
-      armor-toughness: 2
+      armor: 8                         # protection
+      armor-toughness: 2               # solidité
+      knockback-resistance: 0.1
 ```
 
-Pour une armure, dépose `<armor-texture>_layer_1.png` (casque, plastron, bottes) et `<armor-texture>_layer_2.png`
-(jambières) dans `textures/`, au format des textures d'armure vanilla (64x32). Les attributs remplacent ceux du
-matériau d'origine : indique tout ce dont l'objet a besoin.
+### Armures : les 3 sortes de textures
 
-Le plugin génère le resource pack (`plugins/CustomBlock/generated/resource-pack.zip`), l'héberge et l'envoie
-à tous les joueurs. Il est aussi envoyé à chaque connexion.
+| Fichier | Rôle |
+|---|---|
+| `texture: ruby_helmet.png` | l'icône de l'objet (inventaire, sol) |
+| `ruby_layer_1.png` | l'armure portée sur le joueur : casque, plastron, bottes |
+| `ruby_layer_2.png` | l'armure portée : jambières uniquement |
+
+`armor-texture: ruby` dit au plugin de prendre `ruby_layer_1.png` et `ruby_layer_2.png`. Toutes les pièces d'un set
+utilisent le même `armor-texture`.
+
+## Crafts
+
+Sous-section `recipe` d'un bloc ou d'un objet. Un ingrédient est un ID custom ou un matériau vanilla.
+
+```yaml
+recipe:
+  type: shaped
+  shape:
+    - "RRR"
+    - " S "
+    - " S "
+  ingredients:
+    R: ruby
+    S: STICK
+```
+
+`type: shapeless` avec `ingredients: [ruby, GOLD_INGOT]` pour un craft sans forme. `amount` règle la quantité obtenue.
 
 ## Resource pack
 
+- `pack-format: auto` : le numéro de format est lu dans ton serveur, rien à régler.
 - **Hébergement intégré** : renseigne `resource-pack.self-host.host` (IP publique ou domaine) et ouvre le port TCP
   `resource-pack.self-host.port` (8163 par défaut).
 - **Hébergement externe** : renseigne `resource-pack.external-url` avec l'URL directe du `.zip`.
-- `resource-pack.pack-format` doit correspondre à ta version de Minecraft.
 
 ## Commandes (permission `customblock.admin`)
 
 | Commande | Rôle |
 |---|---|
-| `/customblock give <joueur> <id> [quantité]` | Donne un bloc ou un objet |
+| `/customblock give <joueur> <id> [quantité]` | Donne un bloc ou un objet (ou un item vanilla) |
 | `/customblock list` | Liste les blocs et objets |
-| `/customblock reload` | Recharge la config, régénère et renvoie le pack |
+| `/customblock reload` | Recharge la config, régénère et renvoie le pack, recharge les crafts |
 | `/customblock pack [send]` | Envoie le pack (à soi, ou `send` à tous) |
 
 ## Compilation

@@ -25,17 +25,20 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private CustomBlockManager manager;
     private CustomItemManager itemManager;
     private ResourcePackManager packManager;
+    private RecipeManager recipeManager;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
 
-        this.manager = new CustomBlockManager(this);
         this.itemManager = new CustomItemManager(this);
+        this.manager = new CustomBlockManager(this, itemManager);
         this.packManager = new ResourcePackManager(this);
+        this.recipeManager = new RecipeManager(this, manager);
         reloadAll();
 
-        getServer().getPluginManager().registerEvents(new BlockListener(manager, packManager), this);
+        getServer().getPluginManager().registerEvents(
+                new BlockListener(this, manager, packManager, recipeManager), this);
 
         var command = getCommand("customblock");
         if (command != null) {
@@ -58,18 +61,9 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private void reloadAll() {
         manager.load();
         itemManager.load(manager.getDefinitions().keySet());
+        manager.validateDrops();
+        recipeManager.reload();
         packManager.rebuild(manager.getDefinitions().values(), itemManager.getDefinitions().values());
-    }
-
-    /** Crée l'item d'un bloc ou d'un objet à partir de son ID, ou null si l'ID est inconnu. */
-    private ItemStack createAny(String id, int amount) {
-        CustomBlockManager.BlockDefinition block = manager.getDefinition(id);
-        if (block != null) return manager.createItem(block, amount);
-
-        CustomItemManager.ItemDefinition item = itemManager.getDefinition(id);
-        if (item != null) return itemManager.createItem(item, amount);
-
-        return null;
     }
 
     @Override
@@ -85,9 +79,10 @@ public final class Main extends JavaPlugin implements TabExecutor {
                 reloadConfig();
                 reloadAll();
                 packManager.sendToAll();
-                send(sender, "<green>Configuration rechargée : <white><blocks></white> bloc(s), <white><items></white> objet(s), <white><textures></white> texture(s) dans le pack.",
+                send(sender, "<green>Configuration rechargée : <white><blocks></white> bloc(s), <white><items></white> objet(s), <white><recipes></white> craft(s), <white><textures></white> modèle(s) dans le pack.",
                         Placeholder.unparsed("blocks", String.valueOf(manager.getDefinitions().size())),
                         Placeholder.unparsed("items", String.valueOf(itemManager.getDefinitions().size())),
+                        Placeholder.unparsed("recipes", String.valueOf(recipeManager.getRecipeCount())),
                         Placeholder.unparsed("textures", String.valueOf(packManager.getTextureCount())));
             }
             case "pack" -> {
@@ -146,7 +141,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
                         return true;
                     }
                 }
-                ItemStack item = createAny(args[2], amount);
+                ItemStack item = manager.createStack(args[2], amount);
                 if (item == null) {
                     send(sender, "<red>Bloc ou objet inconnu : <white><id>", Placeholder.unparsed("id", args[2]));
                     return true;
