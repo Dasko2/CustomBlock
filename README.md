@@ -91,10 +91,17 @@ recipe:
   `resource-pack.self-host.port` (8163 par défaut).
 - **Hébergement externe** : renseigne `resource-pack.external-url` avec l'URL directe du `.zip`.
 
+## Menu
+
+`/cb` (ou `/customblock`) ouvre un menu avec tous tes blocs et objets, classés en Blocs, Armures, Armes, Outils et
+Objets (plus « Tout »). Clic = 1 exemplaire dans ton inventaire, Maj + clic = une pile complète. Les listes sont
+paginées. Le classement des objets se fait d'après leur `material` (`_HELMET`, `_SWORD`, `_PICKAXE`...).
+
 ## Commandes (permission `customblock.admin`)
 
 | Commande | Rôle |
 |---|---|
+| `/cb` ou `/cb menu` | Ouvre le menu de tous les blocs et objets |
 | `/customblock give <joueur> <id> [quantité]` | Donne un bloc ou un objet (ou un item vanilla) |
 | `/customblock list` | Liste les blocs et objets |
 | `/customblock reload` | Recharge la config, régénère et renvoie le pack, recharge les crafts |

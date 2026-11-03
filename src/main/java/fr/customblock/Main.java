@@ -26,6 +26,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private CustomItemManager itemManager;
     private ResourcePackManager packManager;
     private RecipeManager recipeManager;
+    private MenuManager menuManager;
 
     @Override
     public void onEnable() {
@@ -37,8 +38,11 @@ public final class Main extends JavaPlugin implements TabExecutor {
         this.recipeManager = new RecipeManager(this, manager);
         reloadAll();
 
+        this.menuManager = new MenuManager(this, manager, itemManager);
+
         getServer().getPluginManager().registerEvents(
                 new BlockListener(this, manager, packManager, recipeManager), this);
+        getServer().getPluginManager().registerEvents(menuManager, this);
 
         var command = getCommand("customblock");
         if (command != null) {
@@ -70,11 +74,22 @@ public final class Main extends JavaPlugin implements TabExecutor {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
         if (args.length == 0) {
-            send(sender, "<gray>Usage : <white>/" + label + " <give|list|reload|pack>");
+            if (sender instanceof Player player) {
+                menuManager.openMain(player);
+            } else {
+                send(sender, "<gray>Usage : <white>/" + label + " <give|list|reload|pack|menu>");
+            }
             return true;
         }
 
         switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "menu" -> {
+                if (sender instanceof Player player) {
+                    menuManager.openMain(player);
+                } else {
+                    send(sender, "<red>Cette commande est réservée aux joueurs.");
+                }
+            }
             case "reload" -> {
                 reloadConfig();
                 reloadAll();
@@ -153,7 +168,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
                         Placeholder.unparsed("id", args[2].toLowerCase(Locale.ROOT)),
                         Placeholder.unparsed("player", target.getName()));
             }
-            default -> send(sender, "<red>Sous-commande inconnue. Utilise <white>give</white>, <white>list</white>, <white>reload</white> ou <white>pack</white>.");
+            default -> send(sender, "<red>Sous-commande inconnue. Utilise <white>menu</white>, <white>give</white>, <white>list</white>, <white>reload</white> ou <white>pack</white>.");
         }
         return true;
     }
@@ -163,7 +178,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
                                       @NotNull String alias, @NotNull String[] args) {
         List<String> result = new ArrayList<>();
         if (args.length == 1) {
-            for (String sub : List.of("give", "list", "reload", "pack")) {
+            for (String sub : List.of("menu", "give", "list", "reload", "pack")) {
                 if (sub.startsWith(args[0].toLowerCase(Locale.ROOT))) result.add(sub);
             }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("give")) {

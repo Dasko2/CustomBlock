@@ -8,7 +8,7 @@ authors: [CustomBlock]
 commands:
   customblock:
     description: Gestion des blocs personnalisés
-    usage: /customblock <give|list|reload|pack>
+    usage: /customblock [menu|give|list|reload|pack]
     aliases: [cb]
     permission: customblock.admin
 
