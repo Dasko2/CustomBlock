@@ -1,14 +1,21 @@
-# Pour ajouter un bloc : copie une entrée ci-dessous, change l'ID et les propriétés,
-# puis fais /customblock reload. Aucun code Java à modifier.
+# ============================================================
+#  CustomBlock
 #
-# Propriétés :
+#  Ajouter un bloc :
+#    1. Dépose ta texture (PNG, ex. 16x16) dans plugins/CustomBlock/textures/
+#    2. Ajoute une entrée dans "blocks" avec le nom du fichier dans "texture"
+#    3. Fais /customblock reload
+#  Le resource pack est généré automatiquement et envoyé aux joueurs.
+# ============================================================
+
+# Propriétés d'un bloc :
 #   base-material      : matériau de l'item ET du bloc posé (doit être un matériau de bloc)
 #   placed-material    : (optionnel) matériau du bloc posé si différent (hitbox, dureté)
 #   name               : nom affiché, format MiniMessage
 #   lore               : (optionnel) liste de lignes MiniMessage
-#   custom-model-data  : valeur lue par ton resource pack pour afficher la texture
+#   texture            : nom du fichier PNG dans plugins/CustomBlock/textures/
+#   custom-model-data  : (optionnel) valeur ajoutée à l'item, utile pour d'autres plugins
 #   drop-self          : true = le bloc se récupère en le cassant
-
 blocks:
   ruby_block:
     base-material: REDSTONE_BLOCK
@@ -16,6 +23,7 @@ blocks:
     lore:
       - "<gray>Un bloc précieux et rare."
       - "<dark_gray>CustomBlock"
+    texture: ruby_block.png
     custom-model-data: 1001
     drop-self: true
 
@@ -24,6 +32,7 @@ blocks:
     name: "<gradient:#0044ff:#66ccff><bold>Bloc de Saphir</bold></gradient>"
     lore:
       - "<gray>Brille d'un bleu profond."
+    texture: sapphire_block.png
     custom-model-data: 1002
     drop-self: true
 
@@ -31,5 +40,24 @@ blocks:
     base-material: QUARTZ_BRICKS
     placed-material: STONE_BRICKS
     name: "<white>Briques de marbre"
+    texture: marble_bricks.png
     custom-model-data: 1003
     drop-self: true
+
+# Génération et envoi du resource pack
+resource-pack:
+  enabled: true
+  # Numéro de format de ressources de ta version de Minecraft.
+  # Si le client affiche "pack conçu pour une autre version", ajuste cette valeur.
+  pack-format: 84
+  description: "Textures CustomBlock"
+  # true = les joueurs qui refusent le pack sont expulsés
+  required: false
+  prompt: "<yellow>Ce serveur utilise des textures personnalisées."
+  # Hébergement intégré : le plugin sert lui-même le pack en HTTP.
+  # "host" = l'IP publique ou le domaine de ton serveur, "port" doit être ouvert (TCP).
+  self-host:
+    host: "127.0.0.1"
+    port: 8163
+  # Si tu héberges le pack ailleurs, indique ici son URL directe : l'hébergement intégré est alors désactivé.
+  external-url: ""

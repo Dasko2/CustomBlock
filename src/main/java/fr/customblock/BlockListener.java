@@ -12,6 +12,7 @@ import org.bukkit.event.block.BlockPistonExtendEvent;
 import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 
 import java.util.Iterator;
 import java.util.List;
@@ -19,9 +20,16 @@ import java.util.List;
 public final class BlockListener implements Listener {
 
     private final CustomBlockManager manager;
+    private final ResourcePackManager packManager;
 
-    public BlockListener(CustomBlockManager manager) {
+    public BlockListener(CustomBlockManager manager, ResourcePackManager packManager) {
         this.manager = manager;
+        this.packManager = packManager;
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        packManager.send(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

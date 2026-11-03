@@ -23,14 +23,19 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private static final String PREFIX = "<gradient:#55ffff:#5555ff><bold>CustomBlock</bold></gradient> <dark_gray>»</dark_gray> ";
 
     private CustomBlockManager manager;
+    private ResourcePackManager packManager;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+
         this.manager = new CustomBlockManager(this);
         this.manager.load();
 
-        getServer().getPluginManager().registerEvents(new BlockListener(manager), this);
+        this.packManager = new ResourcePackManager(this);
+        this.packManager.rebuild(manager.getDefinitions().values());
+
+        getServer().getPluginManager().registerEvents(new BlockListener(manager, packManager), this);
 
         var command = getCommand("customblock");
         if (command != null) {
@@ -42,10 +47,17 @@ public final class Main extends JavaPlugin implements TabExecutor {
     }
 
     @Override
+    public void onDisable() {
+        if (packManager != null) {
+            packManager.shutdown();
+        }
+    }
+
+    @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
         if (args.length == 0) {
-            send(sender, "<gray>Usage : <white>/" + label + " <give|list|reload>");
+            send(sender, "<gray>Usage : <white>/" + label + " <give|list|reload|pack>");
             return true;
         }
 
@@ -53,8 +65,27 @@ public final class Main extends JavaPlugin implements TabExecutor {
             case "reload" -> {
                 reloadConfig();
                 manager.load();
-                send(sender, "<green>Configuration rechargée : <white><count></white> bloc(s) chargé(s).",
-                        Placeholder.unparsed("count", String.valueOf(manager.getDefinitions().size())));
+                packManager.rebuild(manager.getDefinitions().values());
+                packManager.sendToAll();
+                send(sender, "<green>Configuration rechargée : <white><count></white> bloc(s), <white><textures></white> texture(s) dans le pack.",
+                        Placeholder.unparsed("count", String.valueOf(manager.getDefinitions().size())),
+                        Placeholder.unparsed("textures", String.valueOf(packManager.getTextureCount())));
+            }
+            case "pack" -> {
+                if (!packManager.isReady()) {
+                    send(sender, "<yellow>Aucun resource pack n'est disponible (aucune texture valide ou pack désactivé).");
+                    return true;
+                }
+                if (args.length >= 2 && args[1].equalsIgnoreCase("send")) {
+                    packManager.sendToAll();
+                    send(sender, "<green>Resource pack renvoyé à tous les joueurs.");
+                } else if (sender instanceof Player player) {
+                    packManager.send(player);
+                    send(sender, "<green>Resource pack envoyé. <gray>(Fichier : plugins/CustomBlock/generated/resource-pack.zip)");
+                } else {
+                    send(sender, "<gray>URL : <white><url></white> <dark_gray>- fichier : plugins/CustomBlock/generated/resource-pack.zip",
+                            Placeholder.unparsed("url", packManager.getUrl()));
+                }
             }
             case "list" -> {
                 if (manager.getDefinitions().isEmpty()) {
@@ -65,10 +96,10 @@ public final class Main extends JavaPlugin implements TabExecutor {
                 for (Map.Entry<String, CustomBlockManager.BlockDefinition> entry : manager.getDefinitions().entrySet()) {
                     CustomBlockManager.BlockDefinition def = entry.getValue();
                     sender.sendMessage(MM.deserialize(
-                            "<dark_gray> - </dark_gray><white><id></white> <dark_gray>(</dark_gray><gray><material></gray><dark_gray>, cmd </dark_gray><gray><cmd></gray><dark_gray>)</dark_gray>",
+                            "<dark_gray> - </dark_gray><white><id></white> <dark_gray>(</dark_gray><gray><material></gray><dark_gray>, texture </dark_gray><gray><texture></gray><dark_gray>)</dark_gray>",
                             Placeholder.unparsed("id", def.id()),
                             Placeholder.unparsed("material", def.baseMaterial().name()),
-                            Placeholder.unparsed("cmd", String.valueOf(def.customModelData()))));
+                            Placeholder.unparsed("texture", def.texture() == null ? "aucune" : def.texture())));
                 }
             }
             case "give" -> {
@@ -103,7 +134,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
                         Placeholder.unparsed("id", def.id()),
                         Placeholder.unparsed("player", target.getName()));
             }
-            default -> send(sender, "<red>Sous-commande inconnue. Utilise <white>give</white>, <white>list</white> ou <white>reload</white>.");
+            default -> send(sender, "<red>Sous-commande inconnue. Utilise <white>give</white>, <white>list</white>, <white>reload</white> ou <white>pack</white>.");
         }
         return true;
     }
@@ -113,7 +144,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
                                       @NotNull String alias, @NotNull String[] args) {
         List<String> result = new ArrayList<>();
         if (args.length == 1) {
-            for (String sub : List.of("give", "list", "reload")) {
+            for (String sub : List.of("give", "list", "reload", "pack")) {
                 if (sub.startsWith(args[0].toLowerCase(Locale.ROOT))) result.add(sub);
             }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
@@ -122,6 +153,8 @@ public final class Main extends JavaPlugin implements TabExecutor {
                     result.add(p.getName());
                 }
             }
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("pack")) {
+            if ("send".startsWith(args[1].toLowerCase(Locale.ROOT))) result.add("send");
         } else if (args.length == 3 && args[0].equalsIgnoreCase("give")) {
             for (String id : manager.getDefinitions().keySet()) {
                 if (id.startsWith(args[2].toLowerCase(Locale.ROOT))) result.add(id);

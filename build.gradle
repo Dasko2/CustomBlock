@@ -3,14 +3,15 @@ plugins {
 }
 
 group = 'fr.customblock'
-version = '1.0.0'
+version = '1.1.0'
 
-// Version de l'API Paper : à ajuster si besoin
-def paperVersion = '1.26.2-R0.1-SNAPSHOT'
+// Version de l'API Paper (Minecraft 26.1.2). Pour une autre version : '26.2.build.+', etc.
+def paperVersion = '26.1.2.build.+'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        // Paper 26.x exige Java 25
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -23,12 +24,13 @@ repositories {
 }
 
 dependencies {
+    // Fournie par le serveur à l'exécution : rien n'est embarqué dans le .jar
     compileOnly "io.papermc.paper:paper-api:${paperVersion}"
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.release = 21
+    options.release = 25
 }
 
 processResources {

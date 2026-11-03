@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Gestionnaire générique : tous les blocs sont définis dans config.yml.
@@ -33,19 +34,25 @@ import java.util.Set;
  */
 public final class CustomBlockManager {
 
-    /** Définition immuable d'un bloc, construite depuis la configuration. */
+    /**
+     * Définition immuable d'un bloc, construite depuis la configuration.
+     *
+     * @param texture nom du fichier PNG dans plugins/CustomBlock/textures/ (peut être null)
+     */
     public record BlockDefinition(
             String id,
             Material baseMaterial,
             Material placedMaterial,
             String name,
             List<String> lore,
+            String texture,
             int customModelData,
             boolean dropSelf
     ) {
     }
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
+    private static final Pattern VALID_ID = Pattern.compile("[a-z0-9_.-]+");
 
     private final Main plugin;
     private final NamespacedKey idKey;
@@ -73,6 +80,10 @@ public final class CustomBlockManager {
             if (s == null) continue;
 
             String id = key.toLowerCase(Locale.ROOT);
+            if (!VALID_ID.matcher(id).matches()) {
+                plugin.getLogger().warning("[" + key + "] ID invalide (lettres minuscules, chiffres, _ . - uniquement) : ignoré.");
+                continue;
+            }
 
             Material base = Material.matchMaterial(s.getString("base-material", "STONE"));
             if (base == null || !base.isBlock() || base.isAir() || !base.isItem()) {
@@ -93,10 +104,12 @@ public final class CustomBlockManager {
 
             String name = s.getString("name", "<white>" + id);
             List<String> lore = s.getStringList("lore");
+            String texture = s.getString("texture");
+            if (texture != null && texture.isBlank()) texture = null;
             int cmd = s.getInt("custom-model-data", 0);
             boolean dropSelf = s.getBoolean("drop-self", true);
 
-            definitions.put(id, new BlockDefinition(id, base, placed, name, lore, cmd, dropSelf));
+            definitions.put(id, new BlockDefinition(id, base, placed, name, lore, texture, cmd, dropSelf));
             trackedMaterials.add(placed);
         }
     }
@@ -120,7 +133,7 @@ public final class CustomBlockManager {
         return trackedMaterials.contains(material);
     }
 
-    /** Construit l'item d'un bloc : nom MiniMessage, lore, custom-model-data et identifiant caché. */
+    /** Construit l'item d'un bloc : nom MiniMessage, lore, modèle du resource pack et identifiant caché. */
     public ItemStack createItem(BlockDefinition def, int amount) {
         ItemStack item = new ItemStack(def.baseMaterial(), amount);
         ItemMeta meta = item.getItemMeta();
@@ -135,9 +148,16 @@ public final class CustomBlockManager {
             meta.lore(lore);
         }
 
-        CustomModelDataComponent component = meta.getCustomModelDataComponent();
-        component.setFloats(List.of((float) def.customModelData()));
-        meta.setCustomModelDataComponent(component);
+        // Modèle généré automatiquement dans le resource pack : <namespace>:<id>
+        if (def.texture() != null) {
+            meta.setItemModel(new NamespacedKey(plugin, def.id()));
+        }
+
+        if (def.customModelData() != 0) {
+            CustomModelDataComponent component = meta.getCustomModelDataComponent();
+            component.setFloats(List.of((float) def.customModelData()));
+            meta.setCustomModelDataComponent(component);
+        }
 
         meta.getPersistentDataContainer().set(idKey, PersistentDataType.STRING, def.id());
         item.setItemMeta(meta);
