@@ -23,6 +23,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private static final String PREFIX = "<gradient:#55ffff:#5555ff><bold>CustomBlock</bold></gradient> <dark_gray>»</dark_gray> ";
 
     private CustomBlockManager manager;
+    private CustomItemManager itemManager;
     private ResourcePackManager packManager;
 
     @Override
@@ -30,10 +31,9 @@ public final class Main extends JavaPlugin implements TabExecutor {
         saveDefaultConfig();
 
         this.manager = new CustomBlockManager(this);
-        this.manager.load();
-
+        this.itemManager = new CustomItemManager(this);
         this.packManager = new ResourcePackManager(this);
-        this.packManager.rebuild(manager.getDefinitions().values());
+        reloadAll();
 
         getServer().getPluginManager().registerEvents(new BlockListener(manager, packManager), this);
 
@@ -43,7 +43,8 @@ public final class Main extends JavaPlugin implements TabExecutor {
             command.setTabCompleter(this);
         }
 
-        getLogger().info(manager.getDefinitions().size() + " bloc(s) personnalisé(s) chargé(s).");
+        getLogger().info(manager.getDefinitions().size() + " bloc(s) et "
+                + itemManager.getDefinitions().size() + " objet(s) personnalisé(s) chargé(s).");
     }
 
     @Override
@@ -51,6 +52,24 @@ public final class Main extends JavaPlugin implements TabExecutor {
         if (packManager != null) {
             packManager.shutdown();
         }
+    }
+
+    /** Recharge blocs, objets et resource pack depuis la configuration. */
+    private void reloadAll() {
+        manager.load();
+        itemManager.load(manager.getDefinitions().keySet());
+        packManager.rebuild(manager.getDefinitions().values(), itemManager.getDefinitions().values());
+    }
+
+    /** Crée l'item d'un bloc ou d'un objet à partir de son ID, ou null si l'ID est inconnu. */
+    private ItemStack createAny(String id, int amount) {
+        CustomBlockManager.BlockDefinition block = manager.getDefinition(id);
+        if (block != null) return manager.createItem(block, amount);
+
+        CustomItemManager.ItemDefinition item = itemManager.getDefinition(id);
+        if (item != null) return itemManager.createItem(item, amount);
+
+        return null;
     }
 
     @Override
@@ -64,11 +83,11 @@ public final class Main extends JavaPlugin implements TabExecutor {
         switch (args[0].toLowerCase(Locale.ROOT)) {
             case "reload" -> {
                 reloadConfig();
-                manager.load();
-                packManager.rebuild(manager.getDefinitions().values());
+                reloadAll();
                 packManager.sendToAll();
-                send(sender, "<green>Configuration rechargée : <white><count></white> bloc(s), <white><textures></white> texture(s) dans le pack.",
-                        Placeholder.unparsed("count", String.valueOf(manager.getDefinitions().size())),
+                send(sender, "<green>Configuration rechargée : <white><blocks></white> bloc(s), <white><items></white> objet(s), <white><textures></white> texture(s) dans le pack.",
+                        Placeholder.unparsed("blocks", String.valueOf(manager.getDefinitions().size())),
+                        Placeholder.unparsed("items", String.valueOf(itemManager.getDefinitions().size())),
                         Placeholder.unparsed("textures", String.valueOf(packManager.getTextureCount())));
             }
             case "pack" -> {
@@ -88,18 +107,24 @@ public final class Main extends JavaPlugin implements TabExecutor {
                 }
             }
             case "list" -> {
-                if (manager.getDefinitions().isEmpty()) {
-                    send(sender, "<yellow>Aucun bloc n'est défini dans la configuration.");
+                if (manager.getDefinitions().isEmpty() && itemManager.getDefinitions().isEmpty()) {
+                    send(sender, "<yellow>Aucun bloc ni objet n'est défini dans la configuration.");
                     return true;
                 }
-                send(sender, "<gray>Blocs disponibles :");
+                send(sender, "<gray>Blocs et objets disponibles :");
                 for (Map.Entry<String, CustomBlockManager.BlockDefinition> entry : manager.getDefinitions().entrySet()) {
                     CustomBlockManager.BlockDefinition def = entry.getValue();
                     sender.sendMessage(MM.deserialize(
-                            "<dark_gray> - </dark_gray><white><id></white> <dark_gray>(</dark_gray><gray><material></gray><dark_gray>, texture </dark_gray><gray><texture></gray><dark_gray>)</dark_gray>",
+                            "<dark_gray> - </dark_gray><white><id></white> <dark_gray>(bloc, </dark_gray><gray><material></gray><dark_gray>)</dark_gray>",
                             Placeholder.unparsed("id", def.id()),
-                            Placeholder.unparsed("material", def.baseMaterial().name()),
-                            Placeholder.unparsed("texture", def.texture() == null ? "aucune" : def.texture())));
+                            Placeholder.unparsed("material", def.baseMaterial().name())));
+                }
+                for (Map.Entry<String, CustomItemManager.ItemDefinition> entry : itemManager.getDefinitions().entrySet()) {
+                    CustomItemManager.ItemDefinition def = entry.getValue();
+                    sender.sendMessage(MM.deserialize(
+                            "<dark_gray> - </dark_gray><white><id></white> <dark_gray>(objet, </dark_gray><gray><material></gray><dark_gray>)</dark_gray>",
+                            Placeholder.unparsed("id", def.id()),
+                            Placeholder.unparsed("material", def.material().name())));
                 }
             }
             case "give" -> {
@@ -112,11 +137,6 @@ public final class Main extends JavaPlugin implements TabExecutor {
                     send(sender, "<red>Joueur introuvable : <white><name>", Placeholder.unparsed("name", args[1]));
                     return true;
                 }
-                CustomBlockManager.BlockDefinition def = manager.getDefinition(args[2]);
-                if (def == null) {
-                    send(sender, "<red>Bloc inconnu : <white><id>", Placeholder.unparsed("id", args[2]));
-                    return true;
-                }
                 int amount = 1;
                 if (args.length >= 4) {
                     try {
@@ -126,12 +146,16 @@ public final class Main extends JavaPlugin implements TabExecutor {
                         return true;
                     }
                 }
-                ItemStack item = manager.createItem(def, amount);
+                ItemStack item = createAny(args[2], amount);
+                if (item == null) {
+                    send(sender, "<red>Bloc ou objet inconnu : <white><id>", Placeholder.unparsed("id", args[2]));
+                    return true;
+                }
                 target.getInventory().addItem(item).values()
                         .forEach(left -> target.getWorld().dropItemNaturally(target.getLocation(), left));
                 send(sender, "<green>Donné <white><amount>x</white> <white><id></white> à <white><player></white>.",
                         Placeholder.unparsed("amount", String.valueOf(amount)),
-                        Placeholder.unparsed("id", def.id()),
+                        Placeholder.unparsed("id", args[2].toLowerCase(Locale.ROOT)),
                         Placeholder.unparsed("player", target.getName()));
             }
             default -> send(sender, "<red>Sous-commande inconnue. Utilise <white>give</white>, <white>list</white>, <white>reload</white> ou <white>pack</white>.");
@@ -156,8 +180,12 @@ public final class Main extends JavaPlugin implements TabExecutor {
         } else if (args.length == 2 && args[0].equalsIgnoreCase("pack")) {
             if ("send".startsWith(args[1].toLowerCase(Locale.ROOT))) result.add("send");
         } else if (args.length == 3 && args[0].equalsIgnoreCase("give")) {
+            String prefix = args[2].toLowerCase(Locale.ROOT);
             for (String id : manager.getDefinitions().keySet()) {
-                if (id.startsWith(args[2].toLowerCase(Locale.ROOT))) result.add(id);
+                if (id.startsWith(prefix)) result.add(id);
+            }
+            for (String id : itemManager.getDefinitions().keySet()) {
+                if (id.startsWith(prefix)) result.add(id);
             }
         } else if (args.length == 4 && args[0].equalsIgnoreCase("give")) {
             result.addAll(List.of("1", "16", "64"));

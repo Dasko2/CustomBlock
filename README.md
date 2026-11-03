@@ -17,6 +17,35 @@ Plugin Paper (Minecraft 26.1.2, Java 25) pour ajouter des blocs et textures pers
 
 3. Fais `/customblock reload`.
 
+## Ajouter un outil, une arme ou une armure
+
+Même principe, dans la section `items:` de la config :
+
+```yaml
+items:
+  ruby_sword:
+    material: DIAMOND_SWORD
+    name: "<red>Épée de Rubis"
+    texture: ruby_sword.png        # icône
+    durability: 2500
+    attributes:
+      attack-damage: 9
+      attack-speed: 1.6
+
+  ruby_helmet:
+    material: DIAMOND_HELMET
+    name: "<red>Casque de Rubis"
+    texture: ruby_helmet.png       # icône
+    armor-texture: ruby            # textures portées : ruby_layer_1.png et ruby_layer_2.png
+    attributes:
+      armor: 3
+      armor-toughness: 2
+```
+
+Pour une armure, dépose `<armor-texture>_layer_1.png` (casque, plastron, bottes) et `<armor-texture>_layer_2.png`
+(jambières) dans `textures/`, au format des textures d'armure vanilla (64x32). Les attributs remplacent ceux du
+matériau d'origine : indique tout ce dont l'objet a besoin.
+
 Le plugin génère le resource pack (`plugins/CustomBlock/generated/resource-pack.zip`), l'héberge et l'envoie
 à tous les joueurs. Il est aussi envoyé à chaque connexion.
 
@@ -31,8 +60,8 @@ Le plugin génère le resource pack (`plugins/CustomBlock/generated/resource-pac
 
 | Commande | Rôle |
 |---|---|
-| `/customblock give <joueur> <id> [quantité]` | Donne un bloc |
-| `/customblock list` | Liste les blocs |
+| `/customblock give <joueur> <id> [quantité]` | Donne un bloc ou un objet |
+| `/customblock list` | Liste les blocs et objets |
 | `/customblock reload` | Recharge la config, régénère et renvoie le pack |
 | `/customblock pack [send]` | Envoie le pack (à soi, ou `send` à tous) |
 

@@ -3,6 +3,7 @@ package fr.customblock;
 import com.sun.net.httpserver.HttpServer;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 
@@ -16,7 +17,9 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -64,7 +67,8 @@ public final class ResourcePackManager {
     }
 
     /** Régénère le pack depuis les textures et redémarre l'hébergement si nécessaire. */
-    public void rebuild(Collection<CustomBlockManager.BlockDefinition> definitions) {
+    public void rebuild(Collection<CustomBlockManager.BlockDefinition> definitions,
+                        Collection<CustomItemManager.ItemDefinition> items) {
         ready = false;
         textureCount = 0;
 
@@ -91,7 +95,7 @@ public final class ResourcePackManager {
                 for (CustomBlockManager.BlockDefinition def : definitions) {
                     if (def.texture() == null) continue;
 
-                    File file = resolveTexture(def);
+                    File file = resolveFile(def.id(), def.texture());
                     if (file == null) continue;
 
                     String id = def.id();
@@ -104,6 +108,48 @@ public final class ResourcePackManager {
                             ("{\"model\":{\"type\":\"minecraft:model\",\"model\":\""
                                     + namespace + ":block/" + id + "\"}}").getBytes(StandardCharsets.UTF_8));
                     count++;
+                }
+
+                // Outils, armes, armures et objets simples
+                Set<String> armorDone = new HashSet<>();
+                for (CustomItemManager.ItemDefinition item : items) {
+                    String id = item.id();
+
+                    if (item.texture() != null) {
+                        File icon = resolveFile(id, item.texture());
+                        if (icon != null) {
+                            String parent = isHandheld(item.material()) ? "minecraft:item/handheld" : "minecraft:item/generated";
+                            addEntry(zip, "assets/" + namespace + "/textures/item/" + id + ".png",
+                                    Files.readAllBytes(icon.toPath()));
+                            addEntry(zip, "assets/" + namespace + "/models/item/" + id + ".json",
+                                    ("{\"parent\":\"" + parent + "\",\"textures\":{\"layer0\":\""
+                                            + namespace + ":item/" + id + "\"}}").getBytes(StandardCharsets.UTF_8));
+                            addEntry(zip, "assets/" + namespace + "/items/" + id + ".json",
+                                    ("{\"model\":{\"type\":\"minecraft:model\",\"model\":\""
+                                            + namespace + ":item/" + id + "\"}}").getBytes(StandardCharsets.UTF_8));
+                            count++;
+                        }
+                    }
+
+                    // Texture portée de l'armure : <armor-texture>_layer_1.png (casque, plastron, bottes)
+                    // et <armor-texture>_layer_2.png (jambières). Générée une seule fois par set.
+                    String armor = item.armorTexture();
+                    if (armor != null && armorDone.add(armor)) {
+                        File layer1 = resolveFile(id, armor + "_layer_1.png");
+                        if (layer1 == null) continue;
+                        File layer2 = resolveFile(id, armor + "_layer_2.png");
+
+                        addEntry(zip, "assets/" + namespace + "/textures/entity/equipment/humanoid/" + armor + ".png",
+                                Files.readAllBytes(layer1.toPath()));
+                        String layers = "\"humanoid\":[{\"texture\":\"" + namespace + ":" + armor + "\"}]";
+                        if (layer2 != null) {
+                            addEntry(zip, "assets/" + namespace + "/textures/entity/equipment/humanoid_leggings/" + armor + ".png",
+                                    Files.readAllBytes(layer2.toPath()));
+                            layers += ",\"humanoid_leggings\":[{\"texture\":\"" + namespace + ":" + armor + "\"}]";
+                        }
+                        addEntry(zip, "assets/" + namespace + "/equipment/" + armor + ".json",
+                                ("{\"layers\":{" + layers + "}}").getBytes(StandardCharsets.UTF_8));
+                    }
                 }
             }
             bytes = buffer.toByteArray();
@@ -190,10 +236,16 @@ public final class ResourcePackManager {
         return host.equals("127.0.0.1") || host.equalsIgnoreCase("localhost");
     }
 
-    private File resolveTexture(CustomBlockManager.BlockDefinition def) {
-        String name = def.texture();
+    private static boolean isHandheld(Material material) {
+        String name = material.name();
+        return name.endsWith("_SWORD") || name.endsWith("_AXE") || name.endsWith("_PICKAXE")
+                || name.endsWith("_SHOVEL") || name.endsWith("_HOE")
+                || name.equals("MACE") || name.equals("STICK") || name.equals("BLAZE_ROD");
+    }
+
+    private File resolveFile(String ownerId, String name) {
         if (!name.toLowerCase(Locale.ROOT).endsWith(".png")) {
-            plugin.getLogger().warning("[" + def.id() + "] la texture '" + name + "' doit être un fichier .png : ignorée.");
+            plugin.getLogger().warning("[" + ownerId + "] la texture '" + name + "' doit être un fichier .png : ignorée.");
             return null;
         }
 
@@ -201,16 +253,16 @@ public final class ResourcePackManager {
         try {
             String base = texturesDir.getCanonicalPath() + File.separator;
             if (!file.getCanonicalPath().startsWith(base)) {
-                plugin.getLogger().warning("[" + def.id() + "] chemin de texture interdit : " + name);
+                plugin.getLogger().warning("[" + ownerId + "] chemin de texture interdit : " + name);
                 return null;
             }
         } catch (IOException ex) {
-            plugin.getLogger().warning("[" + def.id() + "] chemin de texture illisible : " + name);
+            plugin.getLogger().warning("[" + ownerId + "] chemin de texture illisible : " + name);
             return null;
         }
 
         if (!file.isFile()) {
-            plugin.getLogger().warning("[" + def.id() + "] texture introuvable : dépose '" + name
+            plugin.getLogger().warning("[" + ownerId + "] texture introuvable : dépose '" + name
                     + "' dans " + texturesDir.getPath());
             return null;
         }

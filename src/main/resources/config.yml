@@ -44,6 +44,86 @@ blocks:
     custom-model-data: 1003
     drop-self: true
 
+# ============================================================
+#  Objets : outils, armes, armures, objets simples
+#
+#  Propriétés :
+#    material        : matériau de base (ex. DIAMOND_SWORD, NETHERITE_HELMET, PAPER). Il définit le type
+#                      d'objet : un pic reste un pic, un casque se porte sur la tête.
+#    name / lore     : MiniMessage
+#    texture         : icône PNG dans plugins/CustomBlock/textures/
+#    armor-texture   : (armures) préfixe des textures portées. Dépose <préfixe>_layer_1.png
+#                      (casque, plastron, bottes) et <préfixe>_layer_2.png (jambières) dans textures/.
+#                      Utilise le même préfixe pour toutes les pièces d'un set.
+#    durability      : (optionnel) durabilité maximale
+#    unbreakable     : (optionnel) true = incassable
+#    attributes      : (optionnel) attributs. ATTENTION : ils remplacent ceux du matériau d'origine,
+#                      donc indique tout ce que l'objet doit avoir (ex. dégâts ET vitesse d'attaque).
+#                      attack-damage et attack-speed = valeurs totales affichées en jeu.
+#                      Autres : armor, armor-toughness, knockback-resistance, max-health,
+#                      movement-speed, attack-knockback, luck, ...
+# ============================================================
+items:
+  ruby_sword:
+    material: DIAMOND_SWORD
+    name: "<gradient:#ff0044:#ff8899><bold>Épée de Rubis</bold></gradient>"
+    lore:
+      - "<gray>Forgée dans un rubis pur."
+    texture: ruby_sword.png
+    durability: 2500
+    attributes:
+      attack-damage: 9
+      attack-speed: 1.6
+
+  ruby_pickaxe:
+    material: DIAMOND_PICKAXE
+    name: "<red>Pioche de Rubis"
+    texture: ruby_pickaxe.png
+    durability: 2000
+    attributes:
+      attack-damage: 5
+      attack-speed: 1.2
+
+  ruby_helmet:
+    material: DIAMOND_HELMET
+    name: "<red>Casque de Rubis"
+    texture: ruby_helmet.png
+    armor-texture: ruby
+    durability: 550
+    attributes:
+      armor: 3
+      armor-toughness: 2
+
+  ruby_chestplate:
+    material: DIAMOND_CHESTPLATE
+    name: "<red>Plastron de Rubis"
+    texture: ruby_chestplate.png
+    armor-texture: ruby
+    durability: 800
+    attributes:
+      armor: 8
+      armor-toughness: 2
+
+  ruby_leggings:
+    material: DIAMOND_LEGGINGS
+    name: "<red>Jambières de Rubis"
+    texture: ruby_leggings.png
+    armor-texture: ruby
+    durability: 750
+    attributes:
+      armor: 6
+      armor-toughness: 2
+
+  ruby_boots:
+    material: DIAMOND_BOOTS
+    name: "<red>Bottes de Rubis"
+    texture: ruby_boots.png
+    armor-texture: ruby
+    durability: 650
+    attributes:
+      armor: 3
+      armor-toughness: 2
+
 # Génération et envoi du resource pack
 resource-pack:
   enabled: true
