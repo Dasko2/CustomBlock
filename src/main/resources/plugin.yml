@@ -3,7 +3,7 @@ version: '${version}'
 main: fr.customblock.Main
 api-version: '26.1'
 description: Blocs et textures personnalisés pilotés par configuration, avec génération automatique du resource pack.
-authors: [CustomBlock]
+authors: Dasko2_0
 
 commands:
   customblock:
