@@ -75,6 +75,44 @@ public final class BlockListener implements Listener {
         manager.placeBlock(event.getBlockPlaced(), def, variant);
     }
 
+    /** Barrières invisibles : l'objet pose {@code wall_height} blocs BARRIER l'un sur l'autre (infranchissable en sautant). */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onPlaceWall(BlockPlaceEvent event) {
+        if (event.getBlockPlaced().getType() != Material.BARRIER) return;
+        org.bukkit.inventory.meta.ItemMeta meta = event.getItemInHand().getItemMeta();
+        if (meta == null) return;
+        Integer height = meta.getPersistentDataContainer().get(
+                new NamespacedKey(plugin, "wall_height"), org.bukkit.persistence.PersistentDataType.INTEGER);
+        if (height == null || height <= 1) return;
+
+        Block base = event.getBlockPlaced();
+        for (int i = 1; i < height; i++) {
+            Block above = base.getRelative(0, i, 0);
+            if (above.getY() >= above.getWorld().getMaxHeight() || !(above.isEmpty() || above.isReplaceable())) {
+                event.setCancelled(true);
+                event.getPlayer().sendActionBar(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage()
+                        .deserialize("<red>Pas assez de place : il faut " + height + " blocs de haut."));
+                return;
+            }
+        }
+        for (int i = 1; i < height; i++) {
+            base.getRelative(0, i, 0).setType(Material.BARRIER, false);
+        }
+    }
+
+    /** Casser une barrière en créatif retire aussi les barrières empilées au-dessus (mur complet). */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBreakWall(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        if (block.getType() != Material.BARRIER || event.getPlayer().getGameMode() != GameMode.CREATIVE) return;
+        if (!event.getPlayer().isSneaking()) return;
+        for (int i = 1; i < 8; i++) {
+            Block above = block.getRelative(0, i, 0);
+            if (above.getType() != Material.BARRIER) break;
+            above.setType(Material.AIR, false);
+        }
+    }
+
     /**
      * Les blocs custom sont des blocs-note : on empêche leur état de changer (redstone, voisins)
      * et on coupe le son et l'accordage vanilla, sinon ils changeraient d'apparence.

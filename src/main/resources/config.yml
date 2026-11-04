@@ -190,6 +190,15 @@ biomes:
 #  recipe          : (optionnel) craft, voir plus bas.
 # ------------------------------------------------------------
 items:
+  # Barrière invisible infranchissable : pose wall-height blocs BARRIER l'un sur l'autre (1 à 8).
+  # En créatif, Maj + casser une barrière retire aussi celles empilées au-dessus.
+  invisible_wall:
+    material: BARRIER
+    name: "<gray>Barrière invisible <dark_gray>(2 de haut)"
+    lore:
+      - "<gray>Invisible, on ne peut pas sauter par-dessus."
+    wall-height: 2
+
   ruby:
     material: AMETHYST_SHARD
     name: "<red>Rubis"

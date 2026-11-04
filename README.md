@@ -82,6 +82,19 @@ items:
 `armor-texture: ruby` dit au plugin de prendre `ruby_layer_1.png` et `ruby_layer_2.png`. Toutes les pièces d'un set
 utilisent le même `armor-texture`. Les attributs remplacent ceux du matériau d'origine : indique tout ce dont l'objet a besoin.
 
+### Barrières invisibles
+
+```yaml
+items:
+  invisible_wall:
+    material: BARRIER
+    name: "<gray>Barrière invisible"
+    wall-height: 2        # blocs BARRIER empilés à la pose (1 à 8) : 2 ou plus = impossible de sauter par-dessus
+```
+
+Ce sont de vrais blocs barrière vanilla (invisibles, aucun resource pack nécessaire), posés en colonne. Ils bloquent
+joueurs et mobs. En créatif, **Maj + casser** une barrière retire aussi celles empilées au-dessus.
+
 ## Crafts
 
 Sous-section `recipe` d'un bloc ou d'un objet. Un ingrédient est un ID custom ou un matériau vanilla.

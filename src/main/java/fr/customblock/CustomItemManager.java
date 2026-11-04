@@ -38,6 +38,7 @@ public final class CustomItemManager {
      * @param armorTexture préfixe des textures portées : <préfixe>_layer_1.png et <préfixe>_layer_2.png (peut être null)
      * @param durability   durabilité maximale (0 = celle du matériau)
      * @param attributes   attributs, clés normalisées (ex. attack_damage, armor, max_health)
+     * @param wallHeight   barrière invisible : nombre de blocs BARRIER empilés à la pose (0 = objet normal)
      */
     public record ItemDefinition(
             String id,
@@ -50,7 +51,8 @@ public final class CustomItemManager {
             int durability,
             boolean unbreakable,
             Map<String, Double> attributes,
-            int customModelData
+            int customModelData,
+            int wallHeight
     ) {
     }
 
@@ -113,6 +115,15 @@ public final class CustomItemManager {
                 }
             }
 
+            int wallHeight = 0;
+            if (s.contains("wall-height")) {
+                if (material != Material.BARRIER) {
+                    plugin.getLogger().warning("[" + id + "] wall-height ignoré : material doit être BARRIER.");
+                } else {
+                    wallHeight = Math.max(1, Math.min(8, s.getInt("wall-height", 2)));
+                }
+            }
+
             Map<String, Double> attributes = new LinkedHashMap<>();
             ConfigurationSection attrSection = s.getConfigurationSection("attributes");
             if (attrSection != null) {
@@ -137,7 +148,8 @@ public final class CustomItemManager {
                     Math.max(0, s.getInt("durability", 0)),
                     s.getBoolean("unbreakable", false),
                     attributes,
-                    s.getInt("custom-model-data", 0)));
+                    s.getInt("custom-model-data", 0),
+                    wallHeight));
         }
     }
 
@@ -206,6 +218,10 @@ public final class CustomItemManager {
             meta.setCustomModelDataComponent(component);
         }
 
+        if (def.wallHeight() > 0) {
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "wall_height"),
+                    org.bukkit.persistence.PersistentDataType.INTEGER, def.wallHeight());
+        }
         meta.getPersistentDataContainer().set(idKey, org.bukkit.persistence.PersistentDataType.STRING, def.id());
         item.setItemMeta(meta);
         return item;
