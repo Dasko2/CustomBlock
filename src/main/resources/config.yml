@@ -331,7 +331,7 @@ resource-pack:
   pack-format-fallback: 84
   description: "Textures CustomBlock"
   # true = les joueurs qui refusent le pack sont expulsés
-  required: false
+  required: True
   prompt: "<yellow>Ce serveur utilise des textures personnalisées."
   # Hébergement intégré : le plugin sert lui-même le pack en HTTP.
   # "host" = l'IP publique ou le domaine de ton serveur, "port" doit être ouvert (TCP).
