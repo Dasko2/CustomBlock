@@ -12,6 +12,12 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -27,6 +33,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private ResourcePackManager packManager;
     private RecipeManager recipeManager;
     private MenuManager menuManager;
+    private BiomeManager biomeManager;
 
     @Override
     public void onEnable() {
@@ -36,7 +43,10 @@ public final class Main extends JavaPlugin implements TabExecutor {
         this.manager = new CustomBlockManager(this, itemManager);
         this.packManager = new ResourcePackManager(this);
         this.recipeManager = new RecipeManager(this, manager);
+        this.biomeManager = new BiomeManager(this, manager);
+        copyDefaultTextures();
         reloadAll();
+        biomeManager.register();
 
         this.menuManager = new MenuManager(this, manager, itemManager);
 
@@ -56,8 +66,44 @@ public final class Main extends JavaPlugin implements TabExecutor {
 
     @Override
     public void onDisable() {
+        if (biomeManager != null) {
+            biomeManager.unregister();
+        }
         if (packManager != null) {
             packManager.shutdown();
+        }
+    }
+
+    /**
+     * Au tout premier lancement, copie des textures d'exemple dans plugins/CustomBlock/textures/
+     * pour que la configuration fournie fonctionne tout de suite. Rien n'est copié ensuite.
+     */
+    private void copyDefaultTextures() {
+        File texturesDir = new File(getDataFolder(), "textures");
+        if (texturesDir.exists()) return;
+
+        if (!texturesDir.mkdirs()) {
+            getLogger().warning("Impossible de créer le dossier " + texturesDir.getPath());
+            return;
+        }
+
+        try (InputStream index = getResource("default-textures.txt")) {
+            if (index == null) return;
+
+            String list = new String(index.readAllBytes(), StandardCharsets.UTF_8);
+            for (String line : list.split("\\R")) {
+                String name = line.trim();
+                if (name.isEmpty()) continue;
+
+                try (InputStream in = getResource("default-textures/" + name)) {
+                    if (in != null) {
+                        Files.copy(in, new File(texturesDir, name).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+            }
+            getLogger().info("Textures d'exemple copiées dans " + texturesDir.getPath());
+        } catch (IOException ex) {
+            getLogger().warning("Copie des textures d'exemple impossible : " + ex.getMessage());
         }
     }
 
@@ -66,8 +112,10 @@ public final class Main extends JavaPlugin implements TabExecutor {
         manager.load();
         itemManager.load(manager.getDefinitions().keySet());
         manager.validateDrops();
+        biomeManager.load();
         recipeManager.reload();
-        packManager.rebuild(manager.getDefinitions().values(), itemManager.getDefinitions().values());
+        packManager.rebuild(manager.getDefinitions().values(), itemManager.getDefinitions().values(),
+                manager.getRegistry());
     }
 
     @Override
@@ -83,6 +131,37 @@ public final class Main extends JavaPlugin implements TabExecutor {
         }
 
         switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "biome" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "<red>Cette commande est réservée aux joueurs.");
+                    return true;
+                }
+                if (args.length < 2 || !args[1].equalsIgnoreCase("apply")) {
+                    send(sender, "<gray>Usage : <white>/" + label + " biome apply [rayon en chunks]");
+                    return true;
+                }
+                if (biomeManager.getBiomeCount() == 0) {
+                    send(sender, "<yellow>Aucun biome valide n'est défini dans la section 'biomes' de la configuration.");
+                    return true;
+                }
+                int radius = 3;
+                if (args.length >= 3) {
+                    try {
+                        radius = Math.max(1, Math.min(6, Integer.parseInt(args[2])));
+                    } catch (NumberFormatException ex) {
+                        send(sender, "<red>Rayon invalide : <white><value>", Placeholder.unparsed("value", args[2]));
+                        return true;
+                    }
+                }
+                int chunks = biomeManager.apply(player.getWorld(), player.getLocation().getBlockX() >> 4,
+                        player.getLocation().getBlockZ() >> 4, radius);
+                if (chunks == 0) {
+                    send(sender, "<yellow>Aucun biome ne s'applique à ce monde (voir 'worlds' dans la configuration).");
+                } else {
+                    send(sender, "<green>Biomes appliqués sur <white><chunks></white> chunk(s) autour de toi.",
+                            Placeholder.unparsed("chunks", String.valueOf(chunks)));
+                }
+            }
             case "menu" -> {
                 if (sender instanceof Player player) {
                     menuManager.openMain(player);
@@ -178,7 +257,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
                                       @NotNull String alias, @NotNull String[] args) {
         List<String> result = new ArrayList<>();
         if (args.length == 1) {
-            for (String sub : List.of("menu", "give", "list", "reload", "pack")) {
+            for (String sub : List.of("menu", "give", "list", "reload", "pack", "biome")) {
                 if (sub.startsWith(args[0].toLowerCase(Locale.ROOT))) result.add(sub);
             }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
@@ -187,6 +266,8 @@ public final class Main extends JavaPlugin implements TabExecutor {
                     result.add(p.getName());
                 }
             }
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("biome")) {
+            if ("apply".startsWith(args[1].toLowerCase(Locale.ROOT))) result.add("apply");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("pack")) {
             if ("send".startsWith(args[1].toLowerCase(Locale.ROOT))) result.add("send");
         } else if (args.length == 3 && args[0].equalsIgnoreCase("give")) {

@@ -3,24 +3,21 @@ package fr.customblock;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.entity.ItemDisplay;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.components.CustomModelDataComponent;
-import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.util.Transformation;
-import org.joml.AxisAngle4f;
-import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -31,32 +28,34 @@ import java.util.regex.Pattern;
 
 /**
  * Gestionnaire générique : tous les blocs sont définis dans config.yml.
- * Aucune classe par bloc n'est nécessaire.
+ *
+ * Un bloc posé est un vrai bloc Minecraft (état de note_block) dont le modèle est remplacé par le
+ * resource pack : l'éclairage, la night vision et le fullbright agissent donc exactement comme sur
+ * un bloc vanilla, sans aucune entité.
  */
 public final class CustomBlockManager {
 
-    /**
-     * Un drop : un objet custom (ID) ou vanilla (matériau), une quantité (min à max) et une chance en %.
-     */
+    /** Un drop : un objet custom (ID) ou vanilla (matériau), une quantité (min à max) et une chance en %. */
     public record DropDefinition(String item, int min, int max, double chance) {
     }
 
     /**
      * Définition immuable d'un bloc, construite depuis la configuration.
      *
-     * @param textures  fichier PNG de chaque face (up, down, north, south, east, west) ; vide = pas de texture
-     * @param hardness  dureté (null = celle du matériau posé, 0 = instantané, négatif = incassable)
-     * @param tool      outil requis pour obtenir les drops (PICKAXE, AXE, SHOVEL, HOE, SWORD) ou null
-     * @param minTier   niveau minimal de l'outil (0 bois/or, 1 pierre/cuivre, 2 fer, 3 diamant, 4 netherite) ou -1
-     * @param drops     objets lâchés à la casse
+     * @param textures fichier PNG de chaque face (up, down, north, south, east, west)
+     * @param axis     true = tronc : il se pose dans le sens de la face cliquée (3 états)
+     * @param hardness dureté (null = celle d'un bloc-note, 0 = instantané, négatif = incassable)
+     * @param tool     outil requis pour obtenir les drops (PICKAXE, AXE, SHOVEL, HOE, SWORD) ou null
+     * @param minTier  niveau minimal de l'outil (0 bois/or, 1 pierre/cuivre, 2 fer, 3 diamant, 4 netherite) ou -1
+     * @param drops    objets lâchés à la casse
      */
     public record BlockDefinition(
             String id,
             Material baseMaterial,
-            Material placedMaterial,
             String name,
             List<String> lore,
             Map<String, String> textures,
+            boolean axis,
             int customModelData,
             Double hardness,
             String tool,
@@ -71,20 +70,23 @@ public final class CustomBlockManager {
 
     private final Main plugin;
     private final CustomItemManager itemManager;
-    private final NamespacedKey idKey;
+    private final BlockStateRegistry registry;
     private final Map<String, BlockDefinition> definitions = new LinkedHashMap<>();
-    private final Set<Material> trackedMaterials = EnumSet.noneOf(Material.class);
+    private final Map<String, BlockData> dataCache = new HashMap<>();
 
     public CustomBlockManager(Main plugin, CustomItemManager itemManager) {
         this.plugin = plugin;
         this.itemManager = itemManager;
-        this.idKey = new NamespacedKey(plugin, "block_id");
+        this.registry = new BlockStateRegistry(plugin);
+    }
+
+    public BlockStateRegistry getRegistry() {
+        return registry;
     }
 
     /** (Re)charge toutes les définitions depuis la configuration. */
     public void load() {
         definitions.clear();
-        trackedMaterials.clear();
 
         ConfigurationSection section = plugin.getConfig().getConfigurationSection("blocks");
         if (section == null) {
@@ -108,23 +110,17 @@ public final class CustomBlockManager {
                 continue;
             }
 
-            Material placed = base;
-            String placedRaw = s.getString("placed-material");
-            if (placedRaw != null) {
-                Material parsed = Material.matchMaterial(placedRaw);
-                if (parsed == null || !parsed.isBlock() || parsed.isAir()) {
-                    plugin.getLogger().warning("[" + id + "] placed-material invalide : base-material utilisé à la place.");
-                } else {
-                    placed = parsed;
-                }
+            if (s.contains("placed-material")) {
+                plugin.getLogger().warning("[" + id + "] 'placed-material' n'est plus utilisé : les blocs sont de vrais états de bloc. Tu peux le retirer.");
+            }
+
+            Map<String, String> textures = parseFaces(id, s);
+            if (textures.isEmpty()) {
+                plugin.getLogger().warning("[" + id + "] bloc ignoré : il lui faut une texture (texture, ou textures avec les 6 faces).");
+                continue;
             }
 
             Double hardness = s.contains("hardness") ? s.getDouble("hardness") : null;
-            if (hardness != null && hardness != 0 && placed.getHardness() <= 0) {
-                plugin.getLogger().warning("[" + id + "] hardness ignorée : le matériau posé " + placed.name()
-                        + " a une dureté fixe. Choisis un placed-material minable (STONE, OAK_PLANKS, DIRT...).");
-                hardness = null;
-            }
 
             String tool = null;
             String toolRaw = s.getString("tool");
@@ -146,20 +142,28 @@ public final class CustomBlockManager {
                 }
             }
 
+            boolean axis = "AXIS".equalsIgnoreCase(s.getString("orientation", "NONE"));
+
+            if (registry.assign(id, axis ? 3 : 1) == null) {
+                plugin.getLogger().severe("[" + id + "] bloc ignoré : plus d'états disponibles.");
+                continue;
+            }
+
             definitions.put(id, new BlockDefinition(
                     id,
                     base,
-                    placed,
                     s.getString("name", "<white>" + id),
                     s.getStringList("lore"),
-                    parseFaces(id, s),
+                    textures,
+                    axis,
                     s.getInt("custom-model-data", 0),
                     hardness,
                     tool,
                     minTier,
                     parseDrops(id, s)));
-            trackedMaterials.add(placed);
         }
+
+        registry.save();
     }
 
     /** Vérifie, une fois blocs et objets chargés, que chaque drop pointe vers un objet existant. */
@@ -190,7 +194,7 @@ public final class CustomBlockManager {
         boolean complete = faces.values().stream().allMatch(v -> v != null);
         if (!any) return Map.of();
         if (!complete) {
-            plugin.getLogger().warning("[" + id + "] textures incomplètes : il faut les 6 faces (all, ou top/bottom/side, ou up/down/north/south/east/west). Texture ignorée.");
+            plugin.getLogger().warning("[" + id + "] textures incomplètes : il faut les 6 faces (all, ou top/bottom/side, ou up/down/north/south/east/west).");
             return Map.of();
         }
         return Collections.unmodifiableMap(faces);
@@ -267,7 +271,7 @@ public final class CustomBlockManager {
         };
     }
 
-    private static int toolTier(String materialName) {
+    static int toolTier(String materialName) {
         int underscore = materialName.indexOf('_');
         return underscore < 0 ? -1 : parseTier(materialName.substring(0, underscore));
     }
@@ -283,20 +287,98 @@ public final class CustomBlockManager {
     /** Retourne la définition correspondant à un item, ou null si ce n'est pas un bloc custom. */
     public BlockDefinition getDefinition(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return null;
-        String id = item.getItemMeta().getPersistentDataContainer().get(idKey, PersistentDataType.STRING);
+        String id = item.getItemMeta().getPersistentDataContainer()
+                .get(new NamespacedKey(plugin, "block_id"), PersistentDataType.STRING);
         return getDefinition(id);
     }
 
-    /** Retourne la définition du bloc custom posé à cet endroit, ou null. */
+    // ------------------------------------------------------------------ blocs posés
+
+    /** Définition du bloc custom posé à cet endroit, ou null (bloc vanilla). */
     public BlockDefinition getDefinitionAt(Block block) {
-        ItemDisplay display = findDisplay(block);
-        if (display == null) return null;
-        return getDefinition(display.getPersistentDataContainer().get(idKey, PersistentDataType.STRING));
+        if (block.getType() != Material.NOTE_BLOCK) return null;
+        return getDefinitionOf(block.getBlockData());
     }
 
-    public boolean isTracked(Material material) {
-        return trackedMaterials.contains(material);
+    public BlockDefinition getDefinitionOf(BlockData data) {
+        if (data.getMaterial() != Material.NOTE_BLOCK) return null;
+        BlockStateRegistry.Entry entry = registry.find(data.getAsString());
+        return entry == null ? null : definitions.get(entry.id());
     }
+
+    public boolean isCustomBlock(Block block) {
+        return getDefinitionAt(block) != null;
+    }
+
+    /**
+     * Données du bloc à poser.
+     *
+     * @param variant 0 = unique (ou axe Y), 1 = axe X, 2 = axe Z
+     * @return les données, ou null si l'ID est inconnu
+     */
+    public BlockData stateData(String id, int variant) {
+        List<String> states = registry.statesOf(id);
+        if (variant < 0 || variant >= states.size()) return null;
+        return dataCache.computeIfAbsent(states.get(variant), Bukkit::createBlockData).clone();
+    }
+
+    /** Variante d'un tronc d'après la face sur laquelle il est posé : 0 = Y, 1 = X, 2 = Z. */
+    public static int axisVariant(Block placed, Block against) {
+        if (placed.getX() != against.getX()) return 1;
+        if (placed.getZ() != against.getZ()) return 2;
+        return 0;
+    }
+
+    /** Pose le bloc custom : le client le dessine avec le modèle du resource pack. */
+    public void placeBlock(Block block, BlockDefinition def, int variant) {
+        BlockData data = stateData(def.id(), def.axis() ? variant : 0);
+        if (data != null) {
+            block.setBlockData(data, false);
+        }
+    }
+
+    /** true si l'outil respecte le type et le niveau demandés par le bloc (null = aucune vérification). */
+    private boolean toolAllows(BlockDefinition def, ItemStack tool) {
+        if (tool == null) return true;
+        if (def.tool() == null && def.minTier() < 0) return true;
+
+        String name = tool.getType().name();
+        if (def.tool() != null && !name.endsWith("_" + def.tool())) return false;
+        return def.minTier() < 0 || toolTier(name) >= def.minTier();
+    }
+
+    /**
+     * Fait tomber les drops d'un bloc custom. Ne modifie pas le bloc lui-même.
+     *
+     * @param tool outil utilisé pour casser (null = pas de vérification, ex. explosion)
+     * @return true si le bloc était un bloc custom
+     */
+    public boolean removeBlock(Block block, ItemStack tool, boolean dropItems) {
+        BlockDefinition def = getDefinitionAt(block);
+        if (def == null) return false;
+
+        if (dropItems && toolAllows(def, tool)) {
+            Location center = block.getLocation().add(0.5, 0.5, 0.5);
+            ThreadLocalRandom random = ThreadLocalRandom.current();
+
+            for (DropDefinition drop : def.drops()) {
+                if (drop.chance() < 100.0 && random.nextDouble() * 100.0 >= drop.chance()) continue;
+
+                int amount = drop.min() == drop.max() ? drop.min() : random.nextInt(drop.min(), drop.max() + 1);
+                while (amount > 0) {
+                    ItemStack stack = createStack(drop.item(), 1);
+                    if (stack == null) break;
+                    int part = Math.min(amount, stack.getMaxStackSize());
+                    stack.setAmount(part);
+                    block.getWorld().dropItemNaturally(center, stack);
+                    amount -= part;
+                }
+            }
+        }
+        return true;
+    }
+
+    // ------------------------------------------------------------------ objets
 
     /** true si l'ID correspond à un bloc ou un objet custom. */
     public boolean isCustomId(String key) {
@@ -338,9 +420,7 @@ public final class CustomBlockManager {
         }
 
         // Modèle généré automatiquement dans le resource pack : <namespace>:<id>
-        if (!def.textures().isEmpty()) {
-            meta.setItemModel(new NamespacedKey(plugin, def.id()));
-        }
+        meta.setItemModel(new NamespacedKey(plugin, def.id()));
 
         if (def.customModelData() != 0) {
             CustomModelDataComponent component = meta.getCustomModelDataComponent();
@@ -348,93 +428,8 @@ public final class CustomBlockManager {
             meta.setCustomModelDataComponent(component);
         }
 
-        meta.getPersistentDataContainer().set(idKey, PersistentDataType.STRING, def.id());
+        meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "block_id"), PersistentDataType.STRING, def.id());
         item.setItemMeta(meta);
         return item;
-    }
-
-    /** Pose le bloc physique (hitbox) et l'entité d'affichage texturée. */
-    public void placeBlock(Block block, BlockDefinition def) {
-        block.setType(def.placedMaterial(), false);
-
-        ItemStack displayItem = createItem(def, 1);
-        Location center = block.getLocation().add(0.5, 0.5, 0.5);
-
-        block.getWorld().spawn(center, ItemDisplay.class, display -> {
-            display.setItemStack(displayItem);
-            display.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
-            // Léger surdimensionnement pour masquer le bloc de base (évite le z-fighting)
-            display.setTransformation(new Transformation(
-                    new Vector3f(),
-                    new AxisAngle4f(),
-                    new Vector3f(1.002f, 1.002f, 1.002f),
-                    new AxisAngle4f()));
-            display.setPersistent(true);
-            display.setInvulnerable(true);
-            display.getPersistentDataContainer().set(idKey, PersistentDataType.STRING, def.id());
-        });
-    }
-
-    /** Cherche l'entité d'affichage d'un bloc custom, ou null si ce n'est pas un bloc custom. */
-    public ItemDisplay findDisplay(Block block) {
-        if (!isTracked(block.getType())) return null;
-
-        Location center = block.getLocation().add(0.5, 0.5, 0.5);
-        for (ItemDisplay display : block.getWorld().getNearbyEntitiesByType(ItemDisplay.class, center, 0.25)) {
-            PersistentDataContainer pdc = display.getPersistentDataContainer();
-            if (pdc.has(idKey, PersistentDataType.STRING)) {
-                return display;
-            }
-        }
-        return null;
-    }
-
-    public boolean isCustomBlock(Block block) {
-        return findDisplay(block) != null;
-    }
-
-    /** true si l'outil respecte le type et le niveau demandés par le bloc (null = aucune vérification). */
-    private boolean toolAllows(BlockDefinition def, ItemStack tool) {
-        if (tool == null) return true;
-        if (def.tool() == null && def.minTier() < 0) return true;
-
-        String name = tool.getType().name();
-        if (def.tool() != null && !name.endsWith("_" + def.tool())) return false;
-        return def.minTier() < 0 || toolTier(name) >= def.minTier();
-    }
-
-    /**
-     * Retire l'entité d'affichage d'un bloc custom et fait éventuellement tomber ses drops.
-     * Ne modifie pas le bloc lui-même.
-     *
-     * @param tool outil utilisé pour casser (null = pas de vérification, ex. explosion)
-     * @return true si le bloc était un bloc custom
-     */
-    public boolean removeBlock(Block block, ItemStack tool, boolean dropItems) {
-        ItemDisplay display = findDisplay(block);
-        if (display == null) return false;
-
-        BlockDefinition def = getDefinition(display.getPersistentDataContainer().get(idKey, PersistentDataType.STRING));
-        display.remove();
-
-        if (dropItems && def != null && toolAllows(def, tool)) {
-            Location center = block.getLocation().add(0.5, 0.5, 0.5);
-            ThreadLocalRandom random = ThreadLocalRandom.current();
-
-            for (DropDefinition drop : def.drops()) {
-                if (drop.chance() < 100.0 && random.nextDouble() * 100.0 >= drop.chance()) continue;
-
-                int amount = drop.min() == drop.max() ? drop.min() : random.nextInt(drop.min(), drop.max() + 1);
-                while (amount > 0) {
-                    ItemStack stack = createStack(drop.item(), 1);
-                    if (stack == null) break;
-                    int part = Math.min(amount, stack.getMaxStackSize());
-                    stack.setAmount(part);
-                    block.getWorld().dropItemNaturally(center, stack);
-                    amount -= part;
-                }
-            }
-        }
-        return true;
     }
 }

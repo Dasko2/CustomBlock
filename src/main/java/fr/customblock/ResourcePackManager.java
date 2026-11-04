@@ -23,6 +23,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -74,7 +75,8 @@ public final class ResourcePackManager {
 
     /** Régénère le pack depuis les textures et redémarre l'hébergement si nécessaire. */
     public void rebuild(Collection<CustomBlockManager.BlockDefinition> definitions,
-                        Collection<CustomItemManager.ItemDefinition> items) {
+                        Collection<CustomItemManager.ItemDefinition> items,
+                        BlockStateRegistry registry) {
         ready = false;
         textureCount = 0;
 
@@ -98,11 +100,15 @@ public final class ResourcePackManager {
             try (ZipOutputStream zip = new ZipOutputStream(buffer)) {
                 addEntry(zip, "pack.mcmeta", mcmeta(format, description).getBytes(StandardCharsets.UTF_8));
 
-                // ---- Blocs : un modèle cube dont chaque face peut avoir sa propre texture ----
+                // ---- Blocs : vrais états de note_block, modèle cube avec une texture par face ----
+                Map<String, String> stateModels = new LinkedHashMap<>();
                 for (CustomBlockManager.BlockDefinition def : definitions) {
                     if (def.textures().isEmpty()) continue;
 
                     String id = def.id();
+                    List<String> states = registry.statesOf(id);
+                    if (states.isEmpty()) continue;
+
                     Map<String, String> resourceByFile = new LinkedHashMap<>();
                     Map<String, String> resourceByFace = new LinkedHashMap<>();
                     boolean valid = true;
@@ -137,7 +143,21 @@ public final class ResourcePackManager {
                     addEntry(zip, "assets/" + namespace + "/items/" + id + ".json",
                             ("{\"model\":{\"type\":\"minecraft:model\",\"model\":\""
                                     + namespace + ":block/" + id + "\"}}").getBytes(StandardCharsets.UTF_8));
+
+                    // Variante 0 : bloc normal (ou tronc debout) ; 1 : tronc sur l'axe X ; 2 : tronc sur l'axe Z
+                    String model = namespace + ":block/" + id;
+                    stateModels.put(BlockStateRegistry.variantKey(states.get(0)), "{\"model\":\"" + model + "\"}");
+                    if (def.axis() && states.size() >= 3) {
+                        stateModels.put(BlockStateRegistry.variantKey(states.get(1)),
+                                "{\"model\":\"" + model + "\",\"x\":90,\"y\":90}");
+                        stateModels.put(BlockStateRegistry.variantKey(states.get(2)),
+                                "{\"model\":\"" + model + "\",\"x\":90}");
+                    }
                     count++;
+                }
+                if (!stateModels.isEmpty()) {
+                    addEntry(zip, "assets/minecraft/blockstates/note_block.json",
+                            noteBlockStates(stateModels).getBytes(StandardCharsets.UTF_8));
                 }
 
                 // ---- Objets : icône, texture en main et armure portée ----
@@ -236,6 +256,27 @@ public final class ResourcePackManager {
         if (isLocalHost(cfg)) {
             plugin.getLogger().warning("resource-pack.self-host.host vaut 127.0.0.1 : seuls les joueurs sur la même machine pourront télécharger le pack. Mets l'IP publique ou le domaine du serveur.");
         }
+    }
+
+    /**
+     * Fichier blockstates du bloc-note : un modèle pour chacun des 1150 états.
+     * Les états de nos blocs pointent vers leur modèle, tous les autres gardent le modèle vanilla.
+     */
+    private static String noteBlockStates(Map<String, String> customModels) {
+        StringBuilder json = new StringBuilder("{\"variants\":{");
+        boolean first = true;
+        for (String instrument : BlockStateRegistry.ALL_INSTRUMENTS) {
+            for (int note = 0; note <= 24; note++) {
+                for (boolean powered : new boolean[]{false, true}) {
+                    String key = "instrument=" + instrument + ",note=" + note + ",powered=" + powered;
+                    String value = customModels.getOrDefault(key, "{\"model\":\"minecraft:block/note_block\"}");
+                    if (!first) json.append(',');
+                    first = false;
+                    json.append('"').append(key).append("\":").append(value);
+                }
+            }
+        }
+        return json.append("}}").toString();
     }
 
     /** Envoie le pack à un joueur (si un pack est prêt). */

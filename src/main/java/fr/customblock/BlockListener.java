@@ -9,26 +9,34 @@ import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockDamageAbortEvent;
 import org.bukkit.event.block.BlockDamageEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
-import org.bukkit.event.block.BlockPistonExtendEvent;
-import org.bukkit.event.block.BlockPistonRetractEvent;
+import org.bukkit.event.block.BlockPhysicsEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.NotePlayEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlotGroup;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.Iterator;
 import java.util.List;
 
 public final class BlockListener implements Listener {
 
+    /** Dureté d'un bloc-note vanilla : référence pour calculer la vitesse de minage voulue. */
+    private static final double NOTE_BLOCK_HARDNESS = 0.8;
+
+    private final Main plugin;
     private final CustomBlockManager manager;
     private final ResourcePackManager packManager;
     private final RecipeManager recipeManager;
@@ -36,6 +44,7 @@ public final class BlockListener implements Listener {
 
     public BlockListener(Main plugin, CustomBlockManager manager,
                          ResourcePackManager packManager, RecipeManager recipeManager) {
+        this.plugin = plugin;
         this.manager = manager;
         this.packManager = packManager;
         this.recipeManager = recipeManager;
@@ -55,27 +64,63 @@ public final class BlockListener implements Listener {
         clearMining(event.getPlayer());
     }
 
+    // ------------------------------------------------------------------ pose
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
         CustomBlockManager.BlockDefinition def = manager.getDefinition(event.getItemInHand());
         if (def == null) return;
 
-        manager.placeBlock(event.getBlockPlaced(), def);
+        int variant = def.axis() ? CustomBlockManager.axisVariant(event.getBlockPlaced(), event.getBlockAgainst()) : 0;
+        manager.placeBlock(event.getBlockPlaced(), def, variant);
     }
 
     /**
-     * Dureté personnalisée : on ajuste la vitesse de minage du joueur pendant qu'il casse ce bloc,
-     * en comparant la dureté voulue à celle du matériau réellement posé.
+     * Les blocs custom sont des blocs-note : on empêche leur état de changer (redstone, voisins)
+     * et on coupe le son et l'accordage vanilla, sinon ils changeraient d'apparence.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPhysics(BlockPhysicsEvent event) {
+        Block block = event.getBlock();
+        if (block.getType() == Material.NOTE_BLOCK && manager.isCustomBlock(block)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onNotePlay(NotePlayEvent event) {
+        if (manager.isCustomBlock(event.getBlock())) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * Désactive l'accordage des blocs-note (clic droit) : il pourrait donner à un bloc-note vanilla
+     * l'apparence d'un bloc custom. L'objet en main reste utilisable, on peut donc toujours poser un bloc contre.
+     */
+    @EventHandler(priority = EventPriority.LOW)
+    public void onInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+
+        Block clicked = event.getClickedBlock();
+        if (clicked == null || clicked.getType() != Material.NOTE_BLOCK) return;
+        if (!plugin.getConfig().getBoolean("disable-note-tuning", true)) return;
+
+        event.setUseInteractedBlock(Event.Result.DENY);
+    }
+
+    // ------------------------------------------------------------------ minage
+
+    /**
+     * Dureté et outil personnalisés : on règle la vitesse de minage du joueur pendant qu'il casse ce bloc,
+     * pour que le temps obtenu corresponde à la dureté voulue (calcul approché, sans enchantements).
      */
     @EventHandler(ignoreCancelled = true)
     public void onDamage(BlockDamageEvent event) {
         Player player = event.getPlayer();
         clearMining(player);
 
-        Block block = event.getBlock();
-        if (!manager.isTracked(block.getType())) return;
-
-        CustomBlockManager.BlockDefinition def = manager.getDefinitionAt(block);
+        CustomBlockManager.BlockDefinition def = manager.getDefinitionAt(event.getBlock());
         if (def == null || def.hardness() == null) return;
 
         double wanted = def.hardness();
@@ -84,18 +129,55 @@ public final class BlockListener implements Listener {
             return;
         }
 
-        double placed = def.placedMaterial().getHardness();
-        if (placed <= 0) return;
-
         AttributeInstance speed = breakSpeed(player);
         if (speed == null) return;
 
-        double ratio = wanted < 0 ? 0 : placed / wanted; // dureté négative = incassable
+        double multiplier = miningMultiplier(def, wanted, player.getInventory().getItemInMainHand());
         speed.addTransientModifier(new AttributeModifier(
                 miningKey,
-                ratio - 1.0,
+                Math.max(multiplier, 0.0) - 1.0,
                 AttributeModifier.Operation.MULTIPLY_SCALAR_1,
                 EquipmentSlotGroup.ANY));
+    }
+
+    private double miningMultiplier(CustomBlockManager.BlockDefinition def, double wanted, ItemStack tool) {
+        if (wanted < 0) return 0.0; // incassable
+
+        String toolName = tool == null ? "AIR" : tool.getType().name();
+        double tierSpeed = tierSpeed(toolName);
+
+        // Un bloc-note vanilla se mine à la hache : c'est la vitesse que le client va appliquer
+        double clientSpeed = toolName.endsWith("_AXE") ? tierSpeed : 1.0;
+
+        double desiredSpeed = clientSpeed;
+        double harvestFactor = 1.0;
+        if (def.tool() != null) {
+            boolean matches = toolName.endsWith("_" + def.tool());
+            desiredSpeed = matches ? tierSpeed : 1.0;
+            boolean tierOk = def.minTier() < 0 || CustomBlockManager.toolTier(toolName) >= def.minTier();
+            if (!matches || !tierOk) {
+                harvestFactor = 0.3; // sans le bon outil, Minecraft multiplie le temps par 100/30
+            }
+        }
+
+        return (desiredSpeed / clientSpeed) * (NOTE_BLOCK_HARDNESS / wanted) * harvestFactor;
+    }
+
+    private static double tierSpeed(String toolName) {
+        boolean tool = toolName.endsWith("_PICKAXE") || toolName.endsWith("_AXE")
+                || toolName.endsWith("_SHOVEL") || toolName.endsWith("_HOE");
+        if (!tool) return 1.0;
+
+        return switch (toolName.substring(0, toolName.indexOf('_'))) {
+            case "WOODEN" -> 2.0;
+            case "STONE" -> 4.0;
+            case "COPPER" -> 5.0;
+            case "IRON" -> 6.0;
+            case "DIAMOND" -> 8.0;
+            case "NETHERITE" -> 9.0;
+            case "GOLDEN" -> 12.0;
+            default -> 1.0;
+        };
     }
 
     @EventHandler
@@ -109,13 +191,15 @@ public final class BlockListener implements Listener {
         clearMining(player);
 
         Block block = event.getBlock();
-        if (!manager.isTracked(block.getType())) return;
+        if (block.getType() != Material.NOTE_BLOCK) return;
 
         boolean drop = player.getGameMode() != GameMode.CREATIVE;
         if (manager.removeBlock(block, player.getInventory().getItemInMainHand(), drop)) {
             event.setDropItems(false);
         }
     }
+
+    // ------------------------------------------------------------------ explosions
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityExplode(EntityExplodeEvent event) {
@@ -131,7 +215,7 @@ public final class BlockListener implements Listener {
         Iterator<Block> iterator = blocks.iterator();
         while (iterator.hasNext()) {
             Block block = iterator.next();
-            if (!manager.isTracked(block.getType())) continue;
+            if (block.getType() != Material.NOTE_BLOCK) continue;
 
             if (manager.removeBlock(block, null, true)) {
                 iterator.remove();
@@ -140,26 +224,7 @@ public final class BlockListener implements Listener {
         }
     }
 
-    // Les pistons ne doivent pas déplacer un bloc custom (l'entité d'affichage resterait en place)
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onPistonExtend(BlockPistonExtendEvent event) {
-        for (Block block : event.getBlocks()) {
-            if (manager.isCustomBlock(block)) {
-                event.setCancelled(true);
-                return;
-            }
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onPistonRetract(BlockPistonRetractEvent event) {
-        for (Block block : event.getBlocks()) {
-            if (manager.isCustomBlock(block)) {
-                event.setCancelled(true);
-                return;
-            }
-        }
-    }
+    // ------------------------------------------------------------------ utilitaires
 
     private AttributeInstance breakSpeed(Player player) {
         Attribute attribute = Registry.ATTRIBUTE.get(NamespacedKey.minecraft("block_break_speed"));
