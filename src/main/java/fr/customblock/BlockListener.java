@@ -36,6 +36,11 @@ public final class BlockListener implements Listener {
     /** Dureté d'un bloc-note vanilla : référence pour calculer la vitesse de minage voulue. */
     private static final double NOTE_BLOCK_HARDNESS = 0.8;
 
+    /** Bloc-note vanilla : ce que le client croit miner. */
+    private static final org.bukkit.block.data.BlockData NOTE_REFERENCE = Material.NOTE_BLOCK.createBlockData();
+    /** Bloc sans bonus d'outil (vitesse 1 pour tous les outils). */
+    private static final Material NO_TOOL_REFERENCE = Material.GLASS;
+
     private final Main plugin;
     private final CustomBlockManager manager;
     private final ResourcePackManager packManager;
@@ -151,7 +156,7 @@ public final class BlockListener implements Listener {
 
     /**
      * Dureté et outil personnalisés : on règle la vitesse de minage du joueur pendant qu'il casse ce bloc,
-     * pour que le temps obtenu corresponde à la dureté voulue (calcul approché, sans enchantements).
+     * pour que le temps obtenu corresponde exactement à la dureté voulue.
      */
     @EventHandler(ignoreCancelled = true)
     public void onDamage(BlockDamageEvent event) {
@@ -178,43 +183,42 @@ public final class BlockListener implements Listener {
                 EquipmentSlotGroup.ANY));
     }
 
+    /**
+     * Multiplicateur exact de la vitesse de minage. Le client calcule la progression ainsi :
+     * vitesse / dureté_bloc-note(0.8) / 30 ; on veut vitesse_voulue / dureté_voulue / (30 ou 100).
+     * Les vitesses viennent de Paper (BlockData#getDestroySpeed, enchantements inclus) ; hâte, fatigue et eau
+     * s'appliquent des deux côtés et s'annulent.
+     */
     private double miningMultiplier(CustomBlockManager.BlockDefinition def, double wanted, ItemStack tool) {
         if (wanted < 0) return 0.0; // incassable
 
-        String toolName = tool == null ? "AIR" : tool.getType().name();
-        double tierSpeed = tierSpeed(toolName);
+        ItemStack hand = tool == null ? ItemStack.of(Material.AIR) : tool;
+        double clientSpeed = Math.max(0.0001, NOTE_REFERENCE.getDestroySpeed(hand, true));
 
-        // Un bloc-note vanilla se mine à la hache : c'est la vitesse que le client va appliquer
-        double clientSpeed = toolName.endsWith("_AXE") ? tierSpeed : 1.0;
+        Material reference = def.tool() == null ? NO_TOOL_REFERENCE : referenceBlock(def.tool());
+        double desiredSpeed = Math.max(0.0001, reference.createBlockData().getDestroySpeed(hand, true));
 
-        double desiredSpeed = clientSpeed;
         double harvestFactor = 1.0;
         if (def.tool() != null) {
+            String toolName = hand.getType().name();
             boolean matches = toolName.endsWith("_" + def.tool());
-            desiredSpeed = matches ? tierSpeed : 1.0;
             boolean tierOk = def.minTier() < 0 || CustomBlockManager.toolTier(toolName) >= def.minTier();
             if (!matches || !tierOk) {
-                harvestFactor = 0.3; // sans le bon outil, Minecraft multiplie le temps par 100/30
+                harvestFactor = 30.0 / 100.0; // sans le bon outil, Minecraft divise la progression par 100 au lieu de 30
             }
         }
 
         return (desiredSpeed / clientSpeed) * (NOTE_BLOCK_HARDNESS / wanted) * harvestFactor;
     }
 
-    private static double tierSpeed(String toolName) {
-        boolean tool = toolName.endsWith("_PICKAXE") || toolName.endsWith("_AXE")
-                || toolName.endsWith("_SHOVEL") || toolName.endsWith("_HOE");
-        if (!tool) return 1.0;
-
-        return switch (toolName.substring(0, toolName.indexOf('_'))) {
-            case "WOODEN" -> 2.0;
-            case "STONE" -> 4.0;
-            case "COPPER" -> 5.0;
-            case "IRON" -> 6.0;
-            case "DIAMOND" -> 8.0;
-            case "NETHERITE" -> 9.0;
-            case "GOLDEN" -> 12.0;
-            default -> 1.0;
+    /** Bloc vanilla qui représente un type d'outil (sert à connaître la vitesse de l'outil sur ce type de bloc). */
+    private static Material referenceBlock(String tool) {
+        return switch (tool) {
+            case "PICKAXE" -> Material.STONE;
+            case "AXE" -> Material.OAK_PLANKS;
+            case "SHOVEL" -> Material.DIRT;
+            case "HOE" -> Material.HAY_BLOCK;
+            default -> NO_TOOL_REFERENCE;
         };
     }
 

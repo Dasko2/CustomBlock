@@ -44,8 +44,8 @@ blocks:
 
 - **Textures** : `texture: x.png` (6 faces identiques), `top/bottom/side`, ou `up/down/north/south/east/west`.
 - **Troncs** : `orientation: AXIS` : le bloc se pose debout ou couché selon la face cliquée (`top`/`bottom` = bouts, `side` = écorce).
-- **Dureté** : le temps de minage est ajusté par rapport au bloc-note (0.8). Le calcul est approché : il ne tient pas
-  compte des enchantements ni de l'effet Hâte.
+- **Dureté** : le temps de minage suit la formule vanilla avec ta dureté (outil, niveau, Efficacité, Hâte, Fatigue, eau
+  et sol sont pris en compte). Une dureté de 3 se mine comme un bloc vanilla de dureté 3.
 
 ## Objets (outils, armes, armures)
 
