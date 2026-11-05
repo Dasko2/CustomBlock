@@ -8,7 +8,7 @@ authors: [Dasko2_0]
 commands:
   customblock:
     description: Gestion des blocs personnalisés
-    usage: /customblock [menu|give|list|reload|pack|biome]
+    usage: /customblock [menu|search|give|list|reload|pack|biome]
     aliases: [cb]
     permission: customblock.admin
 

@@ -143,6 +143,23 @@ recipe:
 
 `type: shapeless` avec `ingredients: [ruby, GOLD_INGOT]` pour un craft sans forme. `amount` règle la quantité obtenue.
 
+Autres types (un objet peut en avoir plusieurs avec `recipes:` au lieu de `recipe:`) :
+
+```yaml
+recipes:
+  - type: furnace            # ou blasting, smoking, campfire
+    input: ruby_ore
+    experience: 1.0
+    cooking-time: 10s
+  - type: stonecutter
+    input: marble_bricks
+    amount: 2
+  - type: smithing
+    template: NETHERITE_UPGRADE_SMITHING_TEMPLATE
+    base: DIAMOND_SWORD
+    addition: ruby
+```
+
 ## Biomes
 
 Des zones où l'herbe, la terre et les arbres du monde sont remplacés par tes blocs.
@@ -177,7 +194,9 @@ biomes:
 
 `/cb` (ou `/customblock`) ouvre un menu avec tous tes blocs et objets, classés en Blocs, Armures, Armes, Outils et
 Objets (plus « Tout »). Clic = 1 exemplaire dans ton inventaire, Maj + clic = une pile complète. Les listes sont
-paginées. Le classement des objets se fait d'après leur `material` (`_HELMET`, `_SWORD`, `_PICKAXE`...).
+paginées. **Clic droit** sur un élément : aperçu de son craft (établi, four, tailleur de pierre, forge).
+`/cb search <texte>` cherche par ID ou par nom. Un bloc ou objet peut aller dans une catégorie à toi avec
+`category: mes_objets` (nom et icône dans la section `categories:` de la config). Le classement des objets se fait d'après leur `material` (`_HELMET`, `_SWORD`, `_PICKAXE`...).
 
 ## Resource pack
 
@@ -191,6 +210,7 @@ paginées. Le classement des objets se fait d'après leur `material` (`_HELMET`,
 | Commande | Rôle |
 |---|---|
 | `/cb` ou `/cb menu` | Ouvre le menu de tous les blocs et objets |
+| `/cb search <texte>` | Ouvre le menu filtré sur un ID ou un nom |
 | `/cb give <joueur\|@p\|@a\|@s\|@r> <id> [quantité]` | Donne un bloc ou un objet (ou un item vanilla) ; accepte les sélecteurs vanilla |
 | `/cb list` | Liste les blocs et objets |
 | `/cb reload` | Recharge la config, régénère et renvoie le pack, recharge les crafts |

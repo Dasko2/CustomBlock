@@ -51,7 +51,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
         reloadAll();
         biomeManager.register();
 
-        this.menuManager = new MenuManager(this, manager, itemManager);
+        this.menuManager = new MenuManager(this, manager, itemManager, recipeManager);
 
         getServer().getPluginManager().registerEvents(
                 new BlockListener(this, manager, packManager, recipeManager), this);
@@ -209,6 +209,17 @@ public final class Main extends JavaPlugin implements TabExecutor {
                             Placeholder.unparsed("chunks", String.valueOf(chunks)));
                 }
             }
+            case "search" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "<red>Cette commande est réservée aux joueurs.");
+                    return true;
+                }
+                if (args.length < 2) {
+                    send(sender, "<gray>Usage : <white>/" + label + " search <texte>");
+                    return true;
+                }
+                menuManager.openSearch(player, String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)));
+            }
             case "menu" -> {
                 if (sender instanceof Player player) {
                     menuManager.openMain(player);
@@ -320,7 +331,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
                                       @NotNull String alias, @NotNull String[] args) {
         List<String> result = new ArrayList<>();
         if (args.length == 1) {
-            for (String sub : List.of("menu", "give", "list", "reload", "pack", "biome")) {
+            for (String sub : List.of("menu", "search", "give", "list", "reload", "pack", "biome")) {
                 if (sub.startsWith(args[0].toLowerCase(Locale.ROOT))) result.add(sub);
             }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("give")) {

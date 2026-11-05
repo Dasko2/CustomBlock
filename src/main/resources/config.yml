@@ -217,6 +217,18 @@ items:
     material: AMETHYST_SHARD
     name: "<red>Rubis"
     texture: ruby.png
+    # Plusieurs crafts avec "recipes". Types : shaped, shapeless, furnace, blasting, smoking, campfire,
+    # stonecutter, smithing.
+    recipes:
+      - type: furnace                # cuire le minerai de rubis
+        input: ruby_ore
+        experience: 1.0
+        cooking-time: 10s
+      - type: blasting               # même chose au haut-fourneau, deux fois plus vite
+        input: ruby_ore
+        experience: 1.0
+        cooking-time: 5s
+    # category: mes_objets           # range l'objet dans une catégorie personnalisée du menu /cb
 
   ruby_sword:
     material: DIAMOND_SWORD
@@ -351,6 +363,12 @@ items:
 #      type: shapeless
 #      ingredients: [ruby, ruby, GOLD_INGOT]
 # ------------------------------------------------------------
+# Catégories personnalisées du menu /cb (facultatif) : un bloc ou objet avec "category: <clé>" y est rangé.
+# categories:
+#   mes_objets:
+#     name: "<gold>Mes objets"
+#     icon: EMERALD
+
 # Bonus de sets d'armure : effets permanents selon le nombre de pièces portées.
 sets:
   ruby_set:
