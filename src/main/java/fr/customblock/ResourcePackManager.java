@@ -227,6 +227,29 @@ public final class ResourcePackManager {
                                 ("{\"layers\":{" + layers + "}}").getBytes(StandardCharsets.UTF_8));
                     }
                 }
+
+                // ---- Sons : chaque plugins/CustomBlock/sounds/<nom>.ogg devient l'événement customblock:<nom> ----
+                File soundsDir = new File(plugin.getDataFolder(), "sounds");
+                File[] oggs = soundsDir.isDirectory() ? soundsDir.listFiles((d, n) -> n.toLowerCase(Locale.ROOT).endsWith(".ogg")) : null;
+                if (oggs != null && oggs.length > 0) {
+                    StringBuilder json = new StringBuilder("{");
+                    boolean first = true;
+                    for (File ogg : oggs) {
+                        String name = ogg.getName().substring(0, ogg.getName().length() - 4).toLowerCase(Locale.ROOT);
+                        if (!name.matches("[a-z0-9_.-]+")) {
+                            plugin.getLogger().warning("Son ignoré (nom invalide, utilise a-z 0-9 _ . -) : " + ogg.getName());
+                            continue;
+                        }
+                        addEntry(zip, "assets/" + namespace + "/sounds/" + name + ".ogg", Files.readAllBytes(ogg.toPath()));
+                        if (!first) json.append(',');
+                        first = false;
+                        json.append('"').append(name).append("\":{\"sounds\":[\"").append(namespace).append(':').append(name).append("\"]}");
+                    }
+                    json.append('}');
+                    if (!first) {
+                        addEntry(zip, "assets/" + namespace + "/sounds.json", json.toString().getBytes(StandardCharsets.UTF_8));
+                    }
+                }
             }
             bytes = buffer.toByteArray();
         } catch (IOException ex) {

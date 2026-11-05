@@ -88,6 +88,7 @@ public final class BlockListener implements Listener {
 
         int variant = def.axis() ? CustomBlockManager.axisVariant(event.getBlockPlaced(), event.getBlockAgainst()) : 0;
         manager.placeBlock(event.getBlockPlaced(), def, variant);
+        feedback(event.getBlockPlaced(), def.id(), "place-sound", null);
     }
 
     /** Barrières invisibles : l'objet pose {@code wall_height} blocs BARRIER l'un sur l'autre (infranchissable en sautant). */
@@ -258,6 +259,7 @@ public final class BlockListener implements Listener {
 
         if (manager.removeBlock(block, player.getInventory().getItemInMainHand(), custom.isDropItems())) {
             event.setDropItems(false);
+            feedback(block, def.id(), "break-sound", "break-particle");
         }
     }
 
@@ -282,6 +284,47 @@ public final class BlockListener implements Listener {
             if (manager.removeBlock(block, null, true)) {
                 iterator.remove();
                 block.setType(Material.AIR, false);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ sons et particules
+
+    /**
+     * Joue le son et les particules configurés d'un bloc (en plus de ceux du bloc-note vanilla).
+     * Un son est soit un son vanilla (block.amethyst_block.break), soit le nom d'un .ogg de plugins/CustomBlock/sounds/.
+     */
+    private void feedback(Block block, String id, String soundKey, String particleKey) {
+        org.bukkit.configuration.ConfigurationSection cfg = plugin.getConfig().getConfigurationSection("blocks." + id);
+        if (cfg == null) return;
+        org.bukkit.Location center = block.getLocation().add(0.5, 0.5, 0.5);
+
+        String sound = cfg.getString(soundKey);
+        if (sound != null && !sound.isBlank()) {
+            String name = sound.trim().toLowerCase(java.util.Locale.ROOT);
+            if (new java.io.File(plugin.getDataFolder(), "sounds/" + name + ".ogg").isFile()) {
+                name = "customblock:" + name;
+            }
+            block.getWorld().playSound(center, name, org.bukkit.SoundCategory.BLOCKS, 1.0f, 1.0f);
+        }
+
+        String particle = particleKey == null ? null : cfg.getString(particleKey);
+        if (particle != null && !particle.isBlank()) {
+            String[] parts = particle.trim().split("\\s+");
+            org.bukkit.Particle type = Registry.PARTICLE_TYPE.get(NamespacedKey.minecraft(parts[0].toLowerCase(java.util.Locale.ROOT)));
+            if (type == null) return;
+            int count = 10;
+            if (parts.length > 1) {
+                try {
+                    count = Math.max(1, Math.min(200, Integer.parseInt(parts[1])));
+                } catch (NumberFormatException ignored) {
+                    // garde 10
+                }
+            }
+            try {
+                block.getWorld().spawnParticle(type, center, count, 0.3, 0.3, 0.3, 0.02);
+            } catch (IllegalArgumentException ex) {
+                // particule qui exige des données supplémentaires (ex. DUST) : non gérée
             }
         }
     }

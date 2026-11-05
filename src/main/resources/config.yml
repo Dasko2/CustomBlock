@@ -55,6 +55,11 @@ blocks:
     hardness: 4.0
     tool: PICKAXE
     min-tier: IRON
+    # Sons et particules en plus de ceux du bloc-note. Un son = vanilla (block.amethyst_block.break)
+    # ou le nom d'un fichier .ogg déposé dans plugins/CustomBlock/sounds/ (sans l'extension).
+    place-sound: block.amethyst_block.place
+    break-sound: block.amethyst_block.break
+    break-particle: CRIT 15
     # silk-touch : true = seulement avec Toucher de soie, false = seulement sans, absent = toujours
     drops:
       - item: ruby_ore      # le bloc lui-même, uniquement avec Toucher de soie
@@ -221,6 +226,14 @@ items:
     texture: ruby_sword.png               # icône dans l'inventaire
     held-texture: ruby_sword_held.png     # texture en main
     durability: 2500
+    effects:                              # effets de potion : trigger HIT (au coup), HOLD (en main), WEAR (porté)
+      - trigger: HIT
+        effect: POISON
+        duration: 4s                      # 4s, 1.5s, 2m, 100t (ticks)
+        level: 1
+        target: VICTIM                    # VICTIM ou SELF
+        chance: 25                        # en %
+        cooldown: 2s
     attributes:
       attack-damage: 9
       attack-speed: 1.6
@@ -338,6 +351,19 @@ items:
 #      type: shapeless
 #      ingredients: [ruby, ruby, GOLD_INGOT]
 # ------------------------------------------------------------
+# Bonus de sets d'armure : effets permanents selon le nombre de pièces portées.
+sets:
+  ruby_set:
+    pieces: [ruby_helmet, ruby_chestplate, ruby_leggings, ruby_boots]
+    bonuses:
+      2:
+        - effect: RESISTANCE
+          level: 1
+      4:
+        - effect: SPEED
+          level: 1
+        - effect: FIRE_RESISTANCE
+          level: 1
 
 # Génération et envoi du resource pack
 resource-pack:

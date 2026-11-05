@@ -36,6 +36,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private MenuManager menuManager;
     private BiomeManager biomeManager;
     private AutoReloader autoReloader;
+    private EffectManager effectManager;
 
     @Override
     public void onEnable() {
@@ -55,6 +56,11 @@ public final class Main extends JavaPlugin implements TabExecutor {
         getServer().getPluginManager().registerEvents(
                 new BlockListener(this, manager, packManager, recipeManager), this);
         getServer().getPluginManager().registerEvents(menuManager, this);
+
+        this.effectManager = new EffectManager(this);
+        effectManager.load();
+        getServer().getPluginManager().registerEvents(effectManager, this);
+        effectManager.start();
 
         getServer().getServicesManager().register(fr.customblock.api.CustomBlockAPI.class,
                 new ApiImpl(this, manager, itemManager), this, org.bukkit.plugin.ServicePriority.Normal);
@@ -76,6 +82,9 @@ public final class Main extends JavaPlugin implements TabExecutor {
     public void onDisable() {
         if (autoReloader != null) {
             autoReloader.stop();
+        }
+        if (effectManager != null) {
+            effectManager.stop();
         }
         if (biomeManager != null) {
             biomeManager.unregister();
@@ -149,6 +158,9 @@ public final class Main extends JavaPlugin implements TabExecutor {
         manager.validateDrops();
         biomeManager.load();
         recipeManager.reload();
+        if (effectManager != null) {
+            effectManager.load();
+        }
         packManager.rebuild(manager.getDefinitions().values(), itemManager.getDefinitions().values(),
                 manager.getRegistry());
     }

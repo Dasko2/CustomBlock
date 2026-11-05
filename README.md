@@ -99,6 +99,32 @@ items:
 Ce sont de vrais blocs barrière vanilla (invisibles, aucun resource pack nécessaire), posés en colonne. Ils bloquent
 joueurs et mobs. En créatif, **Maj + casser** une barrière retire aussi celles empilées au-dessus.
 
+### Effets, sets d'armure, sons
+
+```yaml
+items:
+  ruby_sword:
+    effects:
+      - trigger: HIT          # HIT = au coup, HOLD = en main, WEAR = porté
+        effect: POISON
+        duration: 4s          # 4s, 1.5s, 2m ou 100t
+        level: 1
+        target: VICTIM        # VICTIM ou SELF (HIT seulement)
+        chance: 25            # %
+        cooldown: 2s
+
+sets:
+  ruby_set:
+    pieces: [ruby_helmet, ruby_chestplate, ruby_leggings, ruby_boots]
+    bonuses:
+      2: [{effect: RESISTANCE, level: 1}]            # actif avec 2 pièces ou plus
+      4: [{effect: SPEED, level: 1}]
+```
+
+Pour un bloc : `place-sound`, `break-sound` (son vanilla, ou nom d'un `.ogg` placé dans `plugins/CustomBlock/sounds/`,
+ajouté automatiquement au pack) et `break-particle: CRIT 15` (particule et quantité). Ces sons s'ajoutent à ceux du
+bloc-note vanilla, ils ne les remplacent pas.
+
 ## Crafts
 
 Sous-section `recipe` d'un bloc ou d'un objet. Un ingrédient est un ID custom ou un matériau vanilla.
