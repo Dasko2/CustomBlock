@@ -57,6 +57,15 @@ blocks:
     min-tier: IRON
     # Sons et particules en plus de ceux du bloc-note. Un son = vanilla (block.amethyst_block.break)
     # ou le nom d'un fichier .ogg déposé dans plugins/CustomBlock/sounds/ (sans l'extension).
+    # Génération dans le monde (nouveaux chunks, ou /cb ore apply pour les chunks existants)
+    generation:
+      worlds: [world]                # absent = tous les mondes normaux (pas le Nether ni l'End)
+      replace: [STONE, DEEPSLATE]    # roches remplacées par les filons
+      min-y: -64
+      max-y: 16
+      veins-per-chunk: 3             # peut être décimal : 0.5 = un chunk sur deux
+      vein-size: 5                   # blocs par filon
+      # biomes: [mountains, dripstone_caves]   # facultatif : biomes vanilla où apparaître
     place-sound: block.amethyst_block.place
     break-sound: block.amethyst_block.break
     break-particle: CRIT 15
@@ -213,6 +222,10 @@ biomes:
         height: 5-8
         leaf-radius: 3
         density: 0.03
+    # Plantes posées sur le sol de la zone : un bloc de 'blocks' (conseillé) ou un matériau vanilla.
+    # plants:
+    #   - block: ruby_leaves
+    #     density: 0.02
 
 # ------------------------------------------------------------
 #  OBJETS : outils, armes, armures, objets simples

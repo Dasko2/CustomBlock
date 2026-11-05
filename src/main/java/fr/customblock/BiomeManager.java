@@ -34,6 +34,10 @@ public final class BiomeManager implements Listener {
     public record TreeDef(String log, String leaves, int minHeight, int maxHeight, int leafRadius, double density) {
     }
 
+    /** Une plante posée sur le sol de la zone : un bloc custom (ID) ou un matériau vanilla (FERN, POPPY...). */
+    public record PlantDef(String block, Material material, double density) {
+    }
+
     public record BiomeDef(
             String id,
             Set<String> worlds,
@@ -44,7 +48,8 @@ public final class BiomeManager implements Listener {
             String top,
             String under,
             int underDepth,
-            List<TreeDef> trees
+            List<TreeDef> trees,
+            List<PlantDef> plants
     ) {
     }
 
@@ -277,12 +282,34 @@ public final class BiomeManager implements Listener {
                             Math.max(0.0, Math.min(1.0, density))));
                 }
 
-                if (top == null && under == null && trees.isEmpty()) {
-                    plugin.getLogger().warning("[biome " + id + "] ignoré : ni 'surface' ni 'trees' valides.");
+                List<PlantDef> plants = new ArrayList<>();
+                for (Map<?, ?> entry : s.getMapList("plants")) {
+                    String block = entry.get("block") == null ? null : String.valueOf(entry.get("block")).trim();
+                    if (block == null || block.isEmpty()) {
+                        plugin.getLogger().warning("[biome " + id + "] plante ignorée : 'block' manquant.");
+                        continue;
+                    }
+                    double density = Math.max(0.0, Math.min(1.0, parseDouble(entry.get("density"), 0.05)));
+                    if (manager.getDefinition(block.toLowerCase(Locale.ROOT)) != null) {
+                        plants.add(new PlantDef(block.toLowerCase(Locale.ROOT), null, density));
+                        continue;
+                    }
+                    Material material = Material.matchMaterial(block);
+                    if (material == null || !material.isBlock() || material.isAir()) {
+                        plugin.getLogger().warning("[biome " + id + "] plante ignorée : '" + block
+                                + "' n'est ni un bloc de 'blocks' ni un matériau vanilla.");
+                        continue;
+                    }
+                    plants.add(new PlantDef(null, material, density));
+                }
+
+                if (top == null && under == null && trees.isEmpty() && plants.isEmpty()) {
+                    plugin.getLogger().warning("[biome " + id + "] ignoré : ni 'surface', 'trees' ni 'plants' valides.");
                     continue;
                 }
 
-                result.add(new BiomeDef(id, worlds, vanilla, scale, coverage, clear, top, under, depth, List.copyOf(trees)));
+                result.add(new BiomeDef(id, worlds, vanilla, scale, coverage, clear, top, under, depth,
+                        List.copyOf(trees), List.copyOf(plants)));
             }
         }
 
@@ -338,7 +365,9 @@ public final class BiomeManager implements Listener {
     private void generate(Region region, Random random, int chunkX, int chunkZ) {
         for (BiomeDef def : biomes) {
             if (!def.worlds().contains(region.worldName())) continue;
-            plantTrees(def, region, random, surface(def, region, chunkX, chunkZ));
+            List<int[]> spots = surface(def, region, chunkX, chunkZ);
+            plantTrees(def, region, random, spots);
+            plantPlants(def, region, random, spots);
         }
     }
 
@@ -369,7 +398,9 @@ public final class BiomeManager implements Listener {
             for (int[] chunk : chunks) {
                 Random random = new Random(world.getSeed() ^ def.id().hashCode()
                         ^ (chunk[0] * 341873128712L) ^ (chunk[1] * 132897987541L));
-                plantTrees(def, region, random, spotsByChunk.get(chunkKey(chunk[0], chunk[1])));
+                List<int[]> spots = spotsByChunk.get(chunkKey(chunk[0], chunk[1]));
+                plantTrees(def, region, random, spots);
+                plantPlants(def, region, random, spots);
             }
             processed = chunks.size();
         }
@@ -417,7 +448,7 @@ public final class BiomeManager implements Listener {
                     }
                 }
 
-                if (!def.trees().isEmpty()) spots.add(new int[]{x, y, z});
+                if (!def.trees().isEmpty() || !def.plants().isEmpty()) spots.add(new int[]{x, y, z});
             }
         }
         return spots;
@@ -468,6 +499,25 @@ public final class BiomeManager implements Listener {
                 if (!tooClose && placeTree(region, random, tree, spot[0], spot[1] + 1, spot[2])) {
                     planted.add(new int[]{spot[0], spot[2]});
                 }
+                break;
+            }
+        }
+    }
+
+    /** Plantes : posées sur le sol de la zone, là où il y a de l'air au-dessus (pas sous un arbre). */
+    private void plantPlants(BiomeDef def, Region region, Random random, List<int[]> spots) {
+        if (spots == null || def.plants().isEmpty()) return;
+
+        for (int[] spot : spots) {
+            int x = spot[0];
+            int y = spot[1] + 1;
+            int z = spot[2];
+            if (!region.contains(x, y, z) || !region.type(x, y, z).isAir()) continue;
+
+            for (PlantDef plant : def.plants()) {
+                if (random.nextDouble() >= plant.density()) continue;
+                BlockData data = plant.block() != null ? manager.stateData(plant.block(), 0) : plant.material().createBlockData();
+                if (data != null) region.set(x, y, z, data);
                 break;
             }
         }

@@ -54,6 +54,9 @@ Sans section `drops`, le bloc se lâche lui-même (désactivable avec `drop-self
   réserve un bloc vanilla peu utilisé (escaliers et dalles de cuivre découpé et de tuf, 10 de chaque) dont l'apparence
   est remplacée par le pack : les vrais blocs de ce type (ex. escalier de cuivre ciré) prennent aussi ton apparence.
   `generated/shape-materials.yml` ne doit jamais être supprimé. Le clic milieu en créatif donne le bloc vanilla réservé.
+- **Génération de minerais** : une section `generation` sur un bloc cube crée des filons dans le monde
+  (`worlds`, `replace`, `min-y`, `max-y`, `veins-per-chunk`, `vein-size`, `biomes`). Ils apparaissent dans les nouveaux
+  chunks ; `/cb ore apply [rayon]` les ajoute dans les chunks déjà explorés (à lancer une seule fois par zone).
 - **Dureté** : le temps de minage suit la formule vanilla avec ta dureté (outil, niveau, Efficacité, Hâte, Fatigue, eau
   et sol sont pris en compte). Une dureté de 3 se mine comme un bloc vanilla de dureté 3.
 
@@ -190,6 +193,8 @@ biomes:
         density: 0.03
 ```
 
+- `plants:` pose des plantes sur le sol de la zone (`block` : un bloc de `blocks`, ou un matériau vanilla comme `FERN`,
+  qui peut tomber si son sol n'est pas de l'herbe vanilla ; préfère un bloc custom).
 - Les zones sont générées dans les **nouveaux chunks**. Pour les chunks déjà explorés : `/cb biome apply [rayon]`
   (rayon en chunks, 1 à 6, 3 par défaut).
 - Ce ne sont **pas de vrais biomes Minecraft** : ciel, brouillard, mobs et teinte de l'eau restent ceux du biome vanilla.
@@ -221,6 +226,7 @@ paginées. **Clic droit** sur un élément : aperçu de son craft (établi, four
 | `/cb list` | Liste les blocs et objets |
 | `/cb reload` | Recharge la config, régénère et renvoie le pack, recharge les crafts |
 | `/cb pack [send]` | Envoie le pack (à soi, ou `send` à tous) |
+| `/cb ore apply [rayon]` | Génère les filons de minerais dans les chunks déjà explorés autour de toi |
 | `/cb biome apply [rayon]` | Applique les biomes aux chunks déjà générés autour de toi |
 
 ## Rechargement automatique

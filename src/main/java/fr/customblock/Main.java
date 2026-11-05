@@ -35,6 +35,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private RecipeManager recipeManager;
     private MenuManager menuManager;
     private BiomeManager biomeManager;
+    private OreManager oreManager;
     private AutoReloader autoReloader;
     private EffectManager effectManager;
 
@@ -47,9 +48,11 @@ public final class Main extends JavaPlugin implements TabExecutor {
         this.packManager = new ResourcePackManager(this);
         this.recipeManager = new RecipeManager(this, manager);
         this.biomeManager = new BiomeManager(this, manager);
+        this.oreManager = new OreManager(this, manager);
         copyDefaultTextures();
         reloadAll();
         biomeManager.register();
+        oreManager.register();
 
         this.menuManager = new MenuManager(this, manager, itemManager, recipeManager);
 
@@ -88,6 +91,9 @@ public final class Main extends JavaPlugin implements TabExecutor {
         }
         if (biomeManager != null) {
             biomeManager.unregister();
+        }
+        if (oreManager != null) {
+            oreManager.unregister();
         }
         if (packManager != null) {
             packManager.shutdown();
@@ -157,6 +163,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
         itemManager.load(manager.getDefinitions().keySet());
         manager.validateDrops();
         biomeManager.load();
+        oreManager.load();
         recipeManager.reload();
         if (effectManager != null) {
             effectManager.load();
@@ -208,6 +215,33 @@ public final class Main extends JavaPlugin implements TabExecutor {
                     send(sender, "<green>Biomes appliqués sur <white><chunks></white> chunk(s) autour de toi.",
                             Placeholder.unparsed("chunks", String.valueOf(chunks)));
                 }
+            }
+            case "ore" -> {
+                if (!(sender instanceof Player player)) {
+                    send(sender, "<red>Cette commande est réservée aux joueurs.");
+                    return true;
+                }
+                if (args.length < 2 || !args[1].equalsIgnoreCase("apply")) {
+                    send(sender, "<gray>Usage : <white>/" + label + " ore apply [rayon en chunks]");
+                    return true;
+                }
+                if (oreManager.getOreCount() == 0) {
+                    send(sender, "<yellow>Aucun minerai n'a de section 'generation' dans la configuration.");
+                    return true;
+                }
+                int radius = 3;
+                if (args.length >= 3) {
+                    try {
+                        radius = Math.max(1, Math.min(6, Integer.parseInt(args[2])));
+                    } catch (NumberFormatException ex) {
+                        send(sender, "<red>Rayon invalide : <white><value>", Placeholder.unparsed("value", args[2]));
+                        return true;
+                    }
+                }
+                int chunks = oreManager.apply(player.getWorld(), player.getLocation().getBlockX() >> 4,
+                        player.getLocation().getBlockZ() >> 4, radius);
+                send(sender, "<green>Minerais générés sur <white><chunks></white> chunk(s) autour de toi.",
+                        Placeholder.unparsed("chunks", String.valueOf(chunks)));
             }
             case "search" -> {
                 if (!(sender instanceof Player player)) {
@@ -331,7 +365,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
                                       @NotNull String alias, @NotNull String[] args) {
         List<String> result = new ArrayList<>();
         if (args.length == 1) {
-            for (String sub : List.of("menu", "search", "give", "list", "reload", "pack", "biome")) {
+            for (String sub : List.of("menu", "search", "give", "list", "reload", "pack", "biome", "ore")) {
                 if (sub.startsWith(args[0].toLowerCase(Locale.ROOT))) result.add(sub);
             }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
@@ -343,6 +377,8 @@ public final class Main extends JavaPlugin implements TabExecutor {
                     result.add(p.getName());
                 }
             }
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("ore")) {
+            if ("apply".startsWith(args[1].toLowerCase(Locale.ROOT))) result.add("apply");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("biome")) {
             if ("apply".startsWith(args[1].toLowerCase(Locale.ROOT))) result.add("apply");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("pack")) {
