@@ -35,8 +35,13 @@ import java.util.regex.Pattern;
  */
 public final class CustomBlockManager {
 
-    /** Un drop : un objet custom (ID) ou vanilla (matériau), une quantité (min à max) et une chance en %. */
-    public record DropDefinition(String item, int min, int max, double chance) {
+    /**
+     * Un drop : un objet custom (ID, y compris le bloc lui-même) ou vanilla (matériau), une quantité (min à max)
+     * et une chance en %.
+     *
+     * @param silkTouch true = seulement avec Toucher de soie, false = seulement sans, null = dans tous les cas
+     */
+    public record DropDefinition(String item, int min, int max, double chance, Boolean silkTouch) {
     }
 
     /**
@@ -216,7 +221,7 @@ public final class CustomBlockManager {
 
         if (!s.contains("drops")) {
             if (s.getBoolean("drop-self", true)) {
-                drops.add(new DropDefinition(id, 1, 1, 100.0));
+                drops.add(new DropDefinition(id, 1, 1, 100.0, null));
             }
             return drops;
         }
@@ -239,7 +244,15 @@ public final class CustomBlockManager {
                     // garde 100 %
                 }
             }
-            drops.add(new DropDefinition(String.valueOf(item).trim(), range[0], range[1], chance));
+            Boolean silk = null;
+            Object silkRaw = entry.get("silk-touch");
+            if (silkRaw instanceof Boolean flag) {
+                silk = flag;
+            } else if (silkRaw != null) {
+                String text = String.valueOf(silkRaw).trim().toLowerCase(Locale.ROOT);
+                if (text.equals("true") || text.equals("false")) silk = Boolean.parseBoolean(text);
+            }
+            drops.add(new DropDefinition(String.valueOf(item).trim(), range[0], range[1], chance, silk));
         }
         return drops;
     }
@@ -361,7 +374,10 @@ public final class CustomBlockManager {
             Location center = block.getLocation().add(0.5, 0.5, 0.5);
             ThreadLocalRandom random = ThreadLocalRandom.current();
 
+            boolean silk = tool != null && tool.containsEnchantment(org.bukkit.enchantments.Enchantment.SILK_TOUCH);
+
             for (DropDefinition drop : def.drops()) {
+                if (drop.silkTouch() != null && drop.silkTouch() != silk) continue;
                 if (drop.chance() < 100.0 && random.nextDouble() * 100.0 >= drop.chance()) continue;
 
                 int amount = drop.min() == drop.max() ? drop.min() : random.nextInt(drop.min(), drop.max() + 1);

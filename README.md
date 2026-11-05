@@ -40,7 +40,11 @@ blocks:
         amount: 1-3
       - item: DIAMOND                 # ou item vanilla
         chance: 10                    # en %
+      - item: ruby_block              # le bloc lui-même (son propre ID)
+        silk-touch: true              # true = seulement avec Toucher de soie, false = seulement sans, absent = toujours
 ```
+
+Sans section `drops`, le bloc se lâche lui-même (désactivable avec `drop-self: false`).
 
 - **Textures** : `texture: x.png` (6 faces identiques), `top/bottom/side`, ou `up/down/north/south/east/west`.
 - **Troncs** : `orientation: AXIS` : le bloc se pose debout ou couché selon la face cliquée (`top`/`bottom` = bouts, `side` = écorce).

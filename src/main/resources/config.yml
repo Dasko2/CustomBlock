@@ -51,12 +51,17 @@ blocks:
     hardness: 4.0
     tool: PICKAXE
     min-tier: IRON
+    # silk-touch : true = seulement avec Toucher de soie, false = seulement sans, absent = toujours
     drops:
+      - item: ruby_ore      # le bloc lui-même, uniquement avec Toucher de soie
+        silk-touch: true
       - item: ruby          # objet custom défini dans "items"
         amount: 1-3
+        silk-touch: false
       - item: DIAMOND       # item vanilla, 10 % de chance
         amount: 1
         chance: 10
+        silk-touch: false
 
   ruby_block:
     base-material: REDSTONE_BLOCK
