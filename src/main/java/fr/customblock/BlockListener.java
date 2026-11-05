@@ -1,5 +1,8 @@
 package fr.customblock;
 
+import fr.customblock.api.CustomBlockBreakEvent;
+import fr.customblock.api.CustomBlockPlaceEvent;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -75,6 +78,13 @@ public final class BlockListener implements Listener {
     public void onPlace(BlockPlaceEvent event) {
         CustomBlockManager.BlockDefinition def = manager.getDefinition(event.getItemInHand());
         if (def == null) return;
+
+        CustomBlockPlaceEvent custom = new CustomBlockPlaceEvent(event.getPlayer(), event.getBlockPlaced(), def.id());
+        Bukkit.getPluginManager().callEvent(custom);
+        if (custom.isCancelled()) {
+            event.setCancelled(true);
+            return;
+        }
 
         int variant = def.axis() ? CustomBlockManager.axisVariant(event.getBlockPlaced(), event.getBlockAgainst()) : 0;
         manager.placeBlock(event.getBlockPlaced(), def, variant);
@@ -235,8 +245,18 @@ public final class BlockListener implements Listener {
         Block block = event.getBlock();
         if (block.getType() != Material.NOTE_BLOCK) return;
 
-        boolean drop = player.getGameMode() != GameMode.CREATIVE;
-        if (manager.removeBlock(block, player.getInventory().getItemInMainHand(), drop)) {
+        CustomBlockManager.BlockDefinition def = manager.getDefinitionAt(block);
+        if (def == null) return;
+
+        CustomBlockBreakEvent custom = new CustomBlockBreakEvent(player, block, def.id(),
+                player.getGameMode() != GameMode.CREATIVE);
+        Bukkit.getPluginManager().callEvent(custom);
+        if (custom.isCancelled()) {
+            event.setCancelled(true);
+            return;
+        }
+
+        if (manager.removeBlock(block, player.getInventory().getItemInMainHand(), custom.isDropItems())) {
             event.setDropItems(false);
         }
     }

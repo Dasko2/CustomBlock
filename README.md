@@ -165,11 +165,28 @@ paginées. Le classement des objets se fait d'après leur `material` (`_HELMET`,
 | Commande | Rôle |
 |---|---|
 | `/cb` ou `/cb menu` | Ouvre le menu de tous les blocs et objets |
-| `/cb give <joueur> <id> [quantité]` | Donne un bloc ou un objet (ou un item vanilla) |
+| `/cb give <joueur\|@p\|@a\|@s\|@r> <id> [quantité]` | Donne un bloc ou un objet (ou un item vanilla) ; accepte les sélecteurs vanilla |
 | `/cb list` | Liste les blocs et objets |
 | `/cb reload` | Recharge la config, régénère et renvoie le pack, recharge les crafts |
 | `/cb pack [send]` | Envoie le pack (à soi, ou `send` à tous) |
 | `/cb biome apply [rayon]` | Applique les biomes aux chunks déjà générés autour de toi |
+
+## Rechargement automatique
+
+Avec `auto-reload: true` (par défaut), modifier `config.yml` ou ajouter/changer un `.png` dans `textures/` recharge le
+plugin au bout de ~2 secondes. Le pack n'est renvoyé aux joueurs que s'il a réellement changé. `/cb reload` reste dispo.
+
+## API pour développeurs
+
+Aucune dépendance n'est requise pour utiliser le plugin. Un autre plugin peut s'y brancher :
+
+```java
+CustomBlockAPI api = Bukkit.getServicesManager().load(CustomBlockAPI.class);
+api.getBlockId(block);            // "ruby_ore" ou null
+api.createItem("ruby_sword", 1);  // l'item prêt à donner
+```
+
+Événements annulables : `CustomBlockPlaceEvent` et `CustomBlockBreakEvent` (package `fr.customblock.api`).
 
 ## Compilation
 

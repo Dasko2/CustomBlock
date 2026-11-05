@@ -7,6 +7,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -34,6 +35,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private RecipeManager recipeManager;
     private MenuManager menuManager;
     private BiomeManager biomeManager;
+    private AutoReloader autoReloader;
 
     @Override
     public void onEnable() {
@@ -54,6 +56,12 @@ public final class Main extends JavaPlugin implements TabExecutor {
                 new BlockListener(this, manager, packManager, recipeManager), this);
         getServer().getPluginManager().registerEvents(menuManager, this);
 
+        getServer().getServicesManager().register(fr.customblock.api.CustomBlockAPI.class,
+                new ApiImpl(this, manager, itemManager), this, org.bukkit.plugin.ServicePriority.Normal);
+
+        this.autoReloader = new AutoReloader(this);
+        autoReloader.start();
+
         var command = getCommand("customblock");
         if (command != null) {
             command.setExecutor(this);
@@ -66,6 +74,9 @@ public final class Main extends JavaPlugin implements TabExecutor {
 
     @Override
     public void onDisable() {
+        if (autoReloader != null) {
+            autoReloader.stop();
+        }
         if (biomeManager != null) {
             biomeManager.unregister();
         }
@@ -104,6 +115,30 @@ public final class Main extends JavaPlugin implements TabExecutor {
             getLogger().info("Textures d'exemple copiées dans " + texturesDir.getPath());
         } catch (IOException ex) {
             getLogger().warning("Copie des textures d'exemple impossible : " + ex.getMessage());
+        }
+    }
+
+    /** Rechargement déclenché par la surveillance des fichiers : le pack n'est renvoyé que s'il a changé. */
+    void autoReload() {
+        String before = packManager.getSha1Hex();
+        try {
+            reloadConfig();
+            reloadAll();
+        } catch (RuntimeException ex) {
+            getLogger().warning("Rechargement automatique échoué : " + ex.getMessage());
+            return;
+        }
+        boolean changed = packManager.isReady() && !before.equals(packManager.getSha1Hex());
+        if (changed) {
+            packManager.sendToAll();
+        }
+        getLogger().info("Rechargement automatique : " + manager.getDefinitions().size() + " bloc(s), "
+                + itemManager.getDefinitions().size() + " objet(s)" + (changed ? ", pack renvoyé." : "."));
+        for (Player admin : Bukkit.getOnlinePlayers()) {
+            if (admin.hasPermission("customblock.admin")) {
+                send(admin, "<green>Fichiers modifiés : rechargement automatique effectué"
+                        + (changed ? " <gray>(pack renvoyé)" : "") + ".");
+            }
         }
     }
 
@@ -218,11 +253,24 @@ public final class Main extends JavaPlugin implements TabExecutor {
             }
             case "give" -> {
                 if (args.length < 3) {
-                    send(sender, "<gray>Usage : <white>/" + label + " give <joueur> <id> [quantité]");
+                    send(sender, "<gray>Usage : <white>/" + label + " give <joueur|@p|@a|@s|@r> <id> [quantité]");
                     return true;
                 }
-                Player target = Bukkit.getPlayerExact(args[1]);
-                if (target == null) {
+                List<Player> targets = new ArrayList<>();
+                if (args[1].startsWith("@")) {
+                    try {
+                        for (Entity entity : Bukkit.selectEntities(sender, args[1])) {
+                            if (entity instanceof Player p) targets.add(p);
+                        }
+                    } catch (IllegalArgumentException ex) {
+                        send(sender, "<red>Sélecteur invalide : <white><value>", Placeholder.unparsed("value", args[1]));
+                        return true;
+                    }
+                } else {
+                    Player exact = Bukkit.getPlayerExact(args[1]);
+                    if (exact != null) targets.add(exact);
+                }
+                if (targets.isEmpty()) {
                     send(sender, "<red>Joueur introuvable : <white><name>", Placeholder.unparsed("name", args[1]));
                     return true;
                 }
@@ -235,17 +283,20 @@ public final class Main extends JavaPlugin implements TabExecutor {
                         return true;
                     }
                 }
-                ItemStack item = manager.createStack(args[2], amount);
-                if (item == null) {
+                if (manager.createStack(args[2], 1) == null) {
                     send(sender, "<red>Bloc ou objet inconnu : <white><id>", Placeholder.unparsed("id", args[2]));
                     return true;
                 }
-                target.getInventory().addItem(item).values()
-                        .forEach(left -> target.getWorld().dropItemNaturally(target.getLocation(), left));
+                for (Player target : targets) {
+                    ItemStack item = manager.createStack(args[2], amount);
+                    target.getInventory().addItem(item).values()
+                            .forEach(left -> target.getWorld().dropItemNaturally(target.getLocation(), left));
+                }
                 send(sender, "<green>Donné <white><amount>x</white> <white><id></white> à <white><player></white>.",
                         Placeholder.unparsed("amount", String.valueOf(amount)),
                         Placeholder.unparsed("id", args[2].toLowerCase(Locale.ROOT)),
-                        Placeholder.unparsed("player", target.getName()));
+                        Placeholder.unparsed("player", targets.size() == 1 ? targets.get(0).getName()
+                                : targets.size() + " joueurs"));
             }
             default -> send(sender, "<red>Sous-commande inconnue. Utilise <white>menu</white>, <white>give</white>, <white>list</white>, <white>reload</white> ou <white>pack</white>.");
         }
@@ -261,6 +312,9 @@ public final class Main extends JavaPlugin implements TabExecutor {
                 if (sub.startsWith(args[0].toLowerCase(Locale.ROOT))) result.add(sub);
             }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
+            for (String selector : List.of("@p", "@a", "@s", "@r")) {
+                if (selector.startsWith(args[1].toLowerCase(Locale.ROOT))) result.add(selector);
+            }
             for (Player p : Bukkit.getOnlinePlayers()) {
                 if (p.getName().toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT))) {
                     result.add(p.getName());

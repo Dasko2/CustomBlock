@@ -13,6 +13,10 @@
 
 # Désactive l'accordage des blocs-note (clic droit). Indispensable : les blocs custom utilisent des
 # états de bloc-note, accorder un bloc-note vanilla pourrait lui donner l'apparence d'un bloc custom.
+# true = surveille config.yml et textures/ : toute modification recharge le plugin toute seule (~2 s)
+# et renvoie le pack aux joueurs seulement s'il a changé.
+auto-reload: true
+
 disable-note-tuning: true
 
 # ------------------------------------------------------------

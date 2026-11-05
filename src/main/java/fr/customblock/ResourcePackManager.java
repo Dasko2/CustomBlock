@@ -65,6 +65,15 @@ public final class ResourcePackManager {
         this.namespace = plugin.getName().toLowerCase(Locale.ROOT);
     }
 
+    /** SHA-1 du pack courant en hexadécimal (chaîne vide s'il n'y a pas de pack). */
+    public String getSha1Hex() {
+        byte[] sha = packSha1;
+        if (sha == null) return "";
+        StringBuilder out = new StringBuilder();
+        for (byte b : sha) out.append(String.format("%02x", b));
+        return out.toString();
+    }
+
     public int getTextureCount() {
         return textureCount;
     }
