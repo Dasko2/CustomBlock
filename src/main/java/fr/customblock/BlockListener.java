@@ -36,11 +36,6 @@ import java.util.List;
 
 public final class BlockListener implements Listener {
 
-    /** Dureté d'un bloc-note vanilla : référence pour calculer la vitesse de minage voulue. */
-    private static final double NOTE_BLOCK_HARDNESS = 0.8;
-
-    /** Bloc-note vanilla : ce que le client croit miner. */
-    private static final org.bukkit.block.data.BlockData NOTE_REFERENCE = Material.NOTE_BLOCK.createBlockData();
     /** Bloc sans bonus d'outil (vitesse 1 pour tous les outils). */
     private static final Material NO_TOOL_REFERENCE = Material.GLASS;
 
@@ -86,8 +81,12 @@ public final class BlockListener implements Listener {
             return;
         }
 
-        int variant = def.axis() ? CustomBlockManager.axisVariant(event.getBlockPlaced(), event.getBlockAgainst()) : 0;
-        manager.placeBlock(event.getBlockPlaced(), def, variant);
+        // Dalles et escaliers : Minecraft pose et oriente lui-même le bloc vanilla réservé
+        if (def.shape().equals("CUBE")) {
+            int variant = def.axis() ? CustomBlockManager.axisVariant(event.getBlockPlaced(), event.getBlockAgainst())
+                    : def.facing() ? CustomBlockManager.facingVariant(event.getPlayer().getFacing()) : 0;
+            manager.placeBlock(event.getBlockPlaced(), def, variant);
+        }
         feedback(event.getBlockPlaced(), def.id(), "place-sound", null);
     }
 
@@ -186,7 +185,7 @@ public final class BlockListener implements Listener {
         AttributeInstance speed = breakSpeed(player);
         if (speed == null) return;
 
-        double multiplier = miningMultiplier(def, wanted, player.getInventory().getItemInMainHand());
+        double multiplier = miningMultiplier(def, wanted, player.getInventory().getItemInMainHand(), event.getBlock());
         speed.addTransientModifier(new AttributeModifier(
                 miningKey,
                 Math.max(multiplier, 0.0) - 1.0,
@@ -200,26 +199,31 @@ public final class BlockListener implements Listener {
      * Les vitesses viennent de Paper (BlockData#getDestroySpeed, enchantements inclus) ; hâte, fatigue et eau
      * s'appliquent des deux côtés et s'annulent.
      */
-    private double miningMultiplier(CustomBlockManager.BlockDefinition def, double wanted, ItemStack tool) {
+    private double miningMultiplier(CustomBlockManager.BlockDefinition def, double wanted, ItemStack tool, Block block) {
         if (wanted < 0) return 0.0; // incassable
 
         ItemStack hand = tool == null ? ItemStack.of(Material.AIR) : tool;
-        double clientSpeed = Math.max(0.0001, NOTE_REFERENCE.getDestroySpeed(hand, true));
+
+        // Ce que le client croit miner : le bloc-note, ou le bloc vanilla réservé (dalle, escalier)
+        org.bukkit.block.data.BlockData clientData = block.getBlockData();
+        double clientHardness = Math.max(0.0001, block.getType().getHardness());
+        double clientSpeed = Math.max(0.0001, clientData.getDestroySpeed(hand, true));
+        double clientDivisor = clientData.requiresCorrectToolForDrops() && !clientData.isPreferredTool(hand) ? 100.0 : 30.0;
 
         Material reference = def.tool() == null ? NO_TOOL_REFERENCE : referenceBlock(def.tool());
         double desiredSpeed = Math.max(0.0001, reference.createBlockData().getDestroySpeed(hand, true));
 
-        double harvestFactor = 1.0;
+        double wantedDivisor = 30.0;
         if (def.tool() != null) {
             String toolName = hand.getType().name();
             boolean matches = toolName.endsWith("_" + def.tool());
             boolean tierOk = def.minTier() < 0 || CustomBlockManager.toolTier(toolName) >= def.minTier();
             if (!matches || !tierOk) {
-                harvestFactor = 30.0 / 100.0; // sans le bon outil, Minecraft divise la progression par 100 au lieu de 30
+                wantedDivisor = 100.0; // sans le bon outil, Minecraft divise la progression par 100 au lieu de 30
             }
         }
 
-        return (desiredSpeed / clientSpeed) * (NOTE_BLOCK_HARDNESS / wanted) * harvestFactor;
+        return (desiredSpeed / clientSpeed) * (clientHardness / wanted) * (clientDivisor / wantedDivisor);
     }
 
     /** Bloc vanilla qui représente un type d'outil (sert à connaître la vitesse de l'outil sur ce type de bloc). */
@@ -244,8 +248,6 @@ public final class BlockListener implements Listener {
         clearMining(player);
 
         Block block = event.getBlock();
-        if (block.getType() != Material.NOTE_BLOCK) return;
-
         CustomBlockManager.BlockDefinition def = manager.getDefinitionAt(block);
         if (def == null) return;
 
@@ -279,7 +281,7 @@ public final class BlockListener implements Listener {
         Iterator<Block> iterator = blocks.iterator();
         while (iterator.hasNext()) {
             Block block = iterator.next();
-            if (block.getType() != Material.NOTE_BLOCK) continue;
+            if (manager.getDefinitionAt(block) == null) continue;
 
             if (manager.removeBlock(block, null, true)) {
                 iterator.remove();

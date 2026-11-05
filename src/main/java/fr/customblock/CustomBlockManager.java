@@ -53,6 +53,8 @@ public final class CustomBlockManager {
      * @param tool     outil requis pour obtenir les drops (PICKAXE, AXE, SHOVEL, HOE, SWORD) ou null
      * @param minTier  niveau minimal de l'outil (0 bois/or, 1 pierre/cuivre, 2 fer, 3 diamant, 4 netherite) ou -1
      * @param drops    objets lâchés à la casse
+     * @param shape    CUBE, SLAB ou STAIRS (dalle et escalier = vrais blocs vanilla réservés)
+     * @param facing   true = le bloc se tourne face au joueur (4 états)
      */
     public record BlockDefinition(
             String id,
@@ -65,7 +67,9 @@ public final class CustomBlockManager {
             Double hardness,
             String tool,
             int minTier,
-            List<DropDefinition> drops
+            List<DropDefinition> drops,
+            String shape,
+            boolean facing
     ) {
     }
 
@@ -76,6 +80,7 @@ public final class CustomBlockManager {
     private final Main plugin;
     private final CustomItemManager itemManager;
     private final BlockStateRegistry registry;
+    private final ShapeRegistry shapes;
     private final Map<String, BlockDefinition> definitions = new LinkedHashMap<>();
     private final Map<String, BlockData> dataCache = new HashMap<>();
 
@@ -83,6 +88,7 @@ public final class CustomBlockManager {
         this.plugin = plugin;
         this.itemManager = itemManager;
         this.registry = new BlockStateRegistry(plugin);
+        this.shapes = new ShapeRegistry(plugin);
     }
 
     public BlockStateRegistry getRegistry() {
@@ -147,9 +153,27 @@ public final class CustomBlockManager {
                 }
             }
 
-            boolean axis = "AXIS".equalsIgnoreCase(s.getString("orientation", "NONE"));
+            String orientation = s.getString("orientation", "NONE");
+            boolean axis = "AXIS".equalsIgnoreCase(orientation);
+            boolean facing = "FACING".equalsIgnoreCase(orientation);
 
-            if (registry.assign(id, axis ? 3 : 1) == null) {
+            String shape = s.getString("shape", "CUBE").trim().toUpperCase(Locale.ROOT);
+            if (!Set.of("CUBE", "SLAB", "STAIRS").contains(shape)) {
+                plugin.getLogger().warning("[" + id + "] shape invalide '" + shape + "' (CUBE, SLAB ou STAIRS) : CUBE utilisé.");
+                shape = "CUBE";
+            }
+
+            if (!shape.equals("CUBE")) {
+                // Dalle ou escalier : vrai bloc vanilla réservé, posé et orienté par Minecraft
+                Material reserved = shapes.assign(id, shape.equals("STAIRS"));
+                if (reserved == null) {
+                    plugin.getLogger().severe("[" + id + "] bloc ignoré : plus de matériau réservé pour les " + shape + " (" + ShapeRegistry.describePool() + ").");
+                    continue;
+                }
+                base = reserved;
+                axis = false;
+                facing = false;
+            } else if (registry.assign(id, axis ? 3 : facing ? 4 : 1) == null) {
                 plugin.getLogger().severe("[" + id + "] bloc ignoré : plus d'états disponibles.");
                 continue;
             }
@@ -165,10 +189,13 @@ public final class CustomBlockManager {
                     hardness,
                     tool,
                     minTier,
-                    parseDrops(id, s)));
+                    parseDrops(id, s),
+                    shape,
+                    facing));
         }
 
         registry.save();
+        shapes.save();
     }
 
     /** Vérifie, une fois blocs et objets chargés, que chaque drop pointe vers un objet existant. */
@@ -309,14 +336,21 @@ public final class CustomBlockManager {
 
     /** Définition du bloc custom posé à cet endroit, ou null (bloc vanilla). */
     public BlockDefinition getDefinitionAt(Block block) {
-        if (block.getType() != Material.NOTE_BLOCK) return null;
-        return getDefinitionOf(block.getBlockData());
+        Material type = block.getType();
+        if (type == Material.NOTE_BLOCK) return getDefinitionOf(block.getBlockData());
+        return definitionOfMaterial(type);
     }
 
     public BlockDefinition getDefinitionOf(BlockData data) {
-        if (data.getMaterial() != Material.NOTE_BLOCK) return null;
+        if (data.getMaterial() != Material.NOTE_BLOCK) return definitionOfMaterial(data.getMaterial());
         BlockStateRegistry.Entry entry = registry.find(data.getAsString());
         return entry == null ? null : definitions.get(entry.id());
+    }
+
+    /** Dalles et escaliers custom : le matériau vanilla réservé identifie le bloc. */
+    private BlockDefinition definitionOfMaterial(Material type) {
+        String id = shapes.idOf(type);
+        return id == null ? null : definitions.get(id);
     }
 
     public boolean isCustomBlock(Block block) {
@@ -342,9 +376,19 @@ public final class CustomBlockManager {
         return 0;
     }
 
+    /** Variante d'un bloc orienté d'après la direction du joueur : sa face avant (nord du modèle) lui fait face. */
+    public static int facingVariant(org.bukkit.block.BlockFace playerFacing) {
+        return switch (playerFacing) {
+            case NORTH -> 2;
+            case EAST -> 3;
+            case WEST -> 1;
+            default -> 0;
+        };
+    }
+
     /** Pose le bloc custom : le client le dessine avec le modèle du resource pack. */
     public void placeBlock(Block block, BlockDefinition def, int variant) {
-        BlockData data = stateData(def.id(), def.axis() ? variant : 0);
+        BlockData data = stateData(def.id(), (def.axis() || def.facing()) ? variant : 0);
         if (data != null) {
             block.setBlockData(data, false);
         }

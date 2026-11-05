@@ -48,6 +48,12 @@ Sans section `drops`, le bloc se lâche lui-même (désactivable avec `drop-self
 
 - **Textures** : `texture: x.png` (6 faces identiques), `top/bottom/side`, ou `up/down/north/south/east/west`.
 - **Troncs** : `orientation: AXIS` : le bloc se pose debout ou couché selon la face cliquée (`top`/`bottom` = bouts, `side` = écorce).
+- **Orientation `FACING`** : le bloc se tourne pour que sa face avant (la face `north` de la texture) soit face au joueur.
+- **Escaliers et dalles** : `shape: STAIRS` ou `shape: SLAB`. Ce sont de vrais escaliers et dalles vanilla : coins,
+  collision, eau et éclairage sont gérés par Minecraft. `top`, `bottom` et `side` donnent les textures. Chaque forme
+  réserve un bloc vanilla peu utilisé (escaliers et dalles de cuivre découpé et de tuf, 10 de chaque) dont l'apparence
+  est remplacée par le pack : les vrais blocs de ce type (ex. escalier de cuivre ciré) prennent aussi ton apparence.
+  `generated/shape-materials.yml` ne doit jamais être supprimé. Le clic milieu en créatif donne le bloc vanilla réservé.
 - **Dureté** : le temps de minage suit la formule vanilla avec ta dureté (outil, niveau, Efficacité, Hâte, Fatigue, eau
   et sol sont pris en compte). Une dureté de 3 se mine comme un bloc vanilla de dureté 3.
 
