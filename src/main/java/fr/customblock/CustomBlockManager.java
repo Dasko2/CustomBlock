@@ -53,7 +53,7 @@ public final class CustomBlockManager {
      * @param tool     outil requis pour obtenir les drops (PICKAXE, AXE, SHOVEL, HOE, SWORD) ou null
      * @param minTier  niveau minimal de l'outil (0 bois/or, 1 pierre/cuivre, 2 fer, 3 diamant, 4 netherite) ou -1
      * @param drops    objets lâchés à la casse
-     * @param shape    CUBE, SLAB (dalle : collision de dalle de chêne pétrifié + modèle affiché) ou CROSS (plante)
+     * @param shape    CUBE, SLAB (dalle), STAIRS (escalier) : collision de dalle de chêne pétrifié + modèle affiché ou CROSS (plante)
      * @param facing   true = le bloc se tourne face au joueur (4 états)
      */
     public record BlockDefinition(
@@ -156,12 +156,8 @@ public final class CustomBlockManager {
             boolean facing = "FACING".equalsIgnoreCase(orientation);
 
             String shape = s.getString("shape", "CUBE").trim().toUpperCase(Locale.ROOT);
-            if (shape.equals("STAIRS")) {
-                plugin.getLogger().warning("[" + id + "] shape STAIRS non supportée (aucun bloc vanilla inobtenable n'a la forme d'un escalier) : bloc ignoré.");
-                continue;
-            }
-            if (!Set.of("CUBE", "SLAB", "CROSS").contains(shape)) {
-                plugin.getLogger().warning("[" + id + "] shape invalide '" + shape + "' (CUBE, SLAB ou CROSS) : CUBE utilisé.");
+            if (!Set.of("CUBE", "SLAB", "STAIRS", "CROSS").contains(shape)) {
+                plugin.getLogger().warning("[" + id + "] shape invalide '" + shape + "' (CUBE, SLAB, STAIRS ou CROSS) : CUBE utilisé.");
                 shape = "CUBE";
             }
 
@@ -170,7 +166,7 @@ public final class CustomBlockManager {
                 base = Material.PAPER;
                 axis = false;
                 facing = false;
-            } else if (shape.equals("SLAB")) {
+            } else if (shape.equals("SLAB") || shape.equals("STAIRS")) {
                 // Dalle : collision de dalle de chêne pétrifié (introuvable en survie, rendue invisible par le pack)
                 // + modèle affiché par une entité
                 base = Material.PETRIFIED_OAK_SLAB;
@@ -357,6 +353,15 @@ public final class CustomBlockManager {
         return new NamespacedKey(plugin, "slab_id");
     }
 
+    /** Position (x,y,z) du bloc auquel appartient une entité de dalle ou d'escalier. */
+    public NamespacedKey slabPosKey() {
+        return new NamespacedKey(plugin, "slab_pos");
+    }
+
+    public static String posKey(Block block) {
+        return block.getX() + "," + block.getY() + "," + block.getZ();
+    }
+
     /** ID de la dalle custom posée ici (lu sur l'affichage de la case), ou null. */
     public String slabIdAt(Block block) {
         for (org.bukkit.entity.Entity entity : slabEntities(block)) {
@@ -366,13 +371,14 @@ public final class CustomBlockManager {
         return null;
     }
 
+    /** Toutes les entités (affichage, boîtes de collision) qui appartiennent à ce bloc. */
     public List<org.bukkit.entity.Entity> slabEntities(Block block) {
         List<org.bukkit.entity.Entity> result = new ArrayList<>();
+        String wanted = posKey(block);
         Location center = block.getLocation().add(0.5, 0.5, 0.5);
-        for (org.bukkit.entity.Entity entity : block.getWorld().getNearbyEntities(center, 0.3, 0.3, 0.3)) {
-            if (entity.getPersistentDataContainer().has(slabKey(), PersistentDataType.STRING)) {
-                result.add(entity);
-            }
+        for (org.bukkit.entity.Entity entity : block.getWorld().getNearbyEntities(center, 1.0, 1.0, 1.0)) {
+            String pos = entity.getPersistentDataContainer().get(slabPosKey(), PersistentDataType.STRING);
+            if (wanted.equals(pos)) result.add(entity);
         }
         return result;
     }
@@ -438,8 +444,8 @@ public final class CustomBlockManager {
         BlockDefinition def = getDefinitionAt(block);
         if (def == null) return false;
 
-        if (def.shape().equals("SLAB")) {
-            // Le modèle affiché disparaît avec la dalle
+        if (def.shape().equals("SLAB") || def.shape().equals("STAIRS")) {
+            // Le modèle affiché et les boîtes de collision disparaissent avec le bloc
             for (org.bukkit.entity.Entity entity : slabEntities(block)) entity.remove();
         }
 

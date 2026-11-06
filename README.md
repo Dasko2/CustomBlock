@@ -52,7 +52,11 @@ Sans section `drops`, le bloc se lâche lui-même (désactivable avec `drop-self
 - **Dalles** : `shape: SLAB` avec `top`, `bottom`, `side`. Aucun bloc vanilla obtenable n'est modifié : la collision, l'eau et
   la fusion en dalle double viennent de la dalle de chêne pétrifié (introuvable en survie, rendue invisible par le pack),
   et l'apparence est un modèle affiché par une entité. Deux dalles ne fusionnent que si ce sont les mêmes. Les pistons ne
-  peuvent pas les déplacer. Les escaliers ne sont pas possibles : aucun bloc vanilla inobtenable n'a cette forme.
+  peuvent pas les déplacer. 
+- **Escaliers** : `shape: STAIRS`, même principe. Le bas (ou le haut) est la collision de la dalle invisible ; la marche
+  du fond est faite de deux petites boîtes de collision invisibles (des shulkers réduits de moitié, sans IA, invulnérables).
+  Limites : escaliers **droits uniquement** (pas de coins qui se raccordent), et un coup sur la marche du fond casse
+  l'escalier sans temps de minage (la boîte cache le bloc derrière).
 - **Plantes en croix** : `shape: CROSS` avec une seule `texture`. La plante se pose sur un sol solide ; elle n'a pas de
   collision et se casse en un coup (la dureté n'est pas utilisée). Ce n'est pas un bloc mais un modèle posé par le plugin :
   elle ne peut pas apparaître dans les `plants:` d'un biome pour l'instant, et ne se pose pas avec un dispensateur.

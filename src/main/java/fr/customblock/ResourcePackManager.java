@@ -119,8 +119,9 @@ public final class ResourcePackManager {
                     String id = def.id();
                     List<String> states = registry.statesOf(id);
                     boolean slab = "SLAB".equals(def.shape());
+                    boolean stairs = "STAIRS".equals(def.shape());
                     boolean cross = "CROSS".equals(def.shape());
-                    if (states.isEmpty() && !slab && !cross) continue;
+                    if (states.isEmpty() && !slab && !stairs && !cross) continue;
 
                     Map<String, String> resourceByFile = new LinkedHashMap<>();
                     Map<String, String> resourceByFace = new LinkedHashMap<>();
@@ -150,13 +151,23 @@ public final class ResourcePackManager {
                         textures.append(",\"").append(face).append("\":\"")
                                 .append(namespace).append(":block/").append(resourceByFace.get(face)).append("\"");
                     }
-                    if (!cross) {
+                    if (!cross && !stairs) {
                         addEntry(zip, "assets/" + namespace + "/models/block/" + id + ".json",
                                 ("{\"parent\":\"minecraft:block/cube\",\"textures\":{" + textures + "}}")
                                         .getBytes(StandardCharsets.UTF_8));
                     }
                     String itemTarget = namespace + ":block/" + id;
 
+                    if (stairs) {
+                        // Escalier droit : modèle vanilla stairs ; le modèle affiché est tourné par le plugin
+                        String stairTextures = "{\"particle\":\"" + namespace + ":block/" + resourceByFace.get("north")
+                                + "\",\"bottom\":\"" + namespace + ":block/" + resourceByFace.get("down")
+                                + "\",\"top\":\"" + namespace + ":block/" + resourceByFace.get("up")
+                                + "\",\"side\":\"" + namespace + ":block/" + resourceByFace.get("north") + "\"}";
+                        addModel(zip, id + "_stairs", "minecraft:block/stairs", stairTextures);
+                        itemTarget = namespace + ":block/" + id + "_stairs";
+                        if (slabParticle == null) slabParticle = namespace + ":block/" + resourceByFace.get("north");
+                    }
                     if (slab) {
                         // Dalle : modèles vanilla slab / slab_top ; le bloc de collision est rendu invisible plus bas
                         String shapeTextures = "{\"particle\":\"" + namespace + ":block/" + resourceByFace.get("north")
@@ -192,7 +203,7 @@ public final class ResourcePackManager {
                     }
                     addEntry(zip, "assets/" + namespace + "/items/" + id + ".json", itemJson.getBytes(StandardCharsets.UTF_8));
 
-                    if (!slab && !cross) {
+                    if (!slab && !stairs && !cross) {
                         // Variante 0 : bloc normal (ou tronc debout) ; 1 : tronc sur l'axe X ; 2 : tronc sur l'axe Z.
                         // Bloc orienté : variantes 0 à 3 = rotation de 0, 90, 180 et 270 degrés.
                         String model = namespace + ":block/" + id;

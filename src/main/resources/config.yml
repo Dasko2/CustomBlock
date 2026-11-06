@@ -134,6 +134,23 @@ blocks:
       ingredients:
         M: marble_bricks
 
+  # Escalier droit (pas de coins automatiques). Même principe que la dalle ; frapper la marche du fond le casse.
+  marble_stairs:
+    shape: STAIRS
+    name: "<white>Escalier en marbre"
+    texture: marble_bricks.png
+    hardness: 2.0
+    tool: PICKAXE
+    recipe:
+      type: shaped
+      amount: 4
+      shape:
+        - "M  "
+        - "MM "
+        - "MMM"
+      ingredients:
+        M: marble_bricks
+
   # Plante en croix : pas de bloc, un modèle posé par le plugin (sans collision, un coup pour la casser).
   # Se pose sur un sol solide, éclairée comme l'air autour d'elle.
   ruby_flower:
