@@ -22,7 +22,6 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.ItemDisplayContext;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
@@ -86,7 +85,7 @@ public final class PlantManager implements Listener {
 
         ItemDisplay display = block.getWorld().spawn(center, ItemDisplay.class, entity -> {
             entity.setItemStack(stack);
-            entity.setItemDisplayTransform(ItemDisplayContext.NONE);
+            entity.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
             entity.setPersistent(true);
             entity.getPersistentDataContainer().set(plantKey, PersistentDataType.STRING, def.id());
         });
