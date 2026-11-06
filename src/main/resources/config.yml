@@ -118,6 +118,22 @@ blocks:
       ingredients:
         Q: QUARTZ_BLOCK
 
+  # Dalle : collision et fusion en dalle double comme en vanilla. Pas de bloc vanilla modifié : elle utilise la dalle
+  # de chêne pétrifié (introuvable en survie) rendue invisible, avec un modèle affiché par-dessus.
+  marble_slab:
+    shape: SLAB
+    name: "<white>Dalle en marbre"
+    texture: marble_bricks.png        # ou top / bottom / side
+    hardness: 2.0
+    tool: PICKAXE
+    recipe:
+      type: shaped
+      amount: 6
+      shape:
+        - "MMM"
+      ingredients:
+        M: marble_bricks
+
   # Plante en croix : pas de bloc, un modèle posé par le plugin (sans collision, un coup pour la casser).
   # Se pose sur un sol solide, éclairée comme l'air autour d'elle.
   ruby_flower:

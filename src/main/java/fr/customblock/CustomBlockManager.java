@@ -53,7 +53,7 @@ public final class CustomBlockManager {
      * @param tool     outil requis pour obtenir les drops (PICKAXE, AXE, SHOVEL, HOE, SWORD) ou null
      * @param minTier  niveau minimal de l'outil (0 bois/or, 1 pierre/cuivre, 2 fer, 3 diamant, 4 netherite) ou -1
      * @param drops    objets lâchés à la casse
-     * @param shape    CUBE, SLAB ou STAIRS (dalle et escalier = vrais blocs vanilla réservés)
+     * @param shape    CUBE, SLAB (dalle : collision de dalle de chêne pétrifié + modèle affiché) ou CROSS (plante)
      * @param facing   true = le bloc se tourne face au joueur (4 états)
      */
     public record BlockDefinition(
@@ -80,7 +80,6 @@ public final class CustomBlockManager {
     private final Main plugin;
     private final CustomItemManager itemManager;
     private final BlockStateRegistry registry;
-    private final ShapeRegistry shapes;
     private final Map<String, BlockDefinition> definitions = new LinkedHashMap<>();
     private final Map<String, BlockData> dataCache = new HashMap<>();
 
@@ -88,7 +87,6 @@ public final class CustomBlockManager {
         this.plugin = plugin;
         this.itemManager = itemManager;
         this.registry = new BlockStateRegistry(plugin);
-        this.shapes = new ShapeRegistry(plugin);
     }
 
     public BlockStateRegistry getRegistry() {
@@ -158,8 +156,12 @@ public final class CustomBlockManager {
             boolean facing = "FACING".equalsIgnoreCase(orientation);
 
             String shape = s.getString("shape", "CUBE").trim().toUpperCase(Locale.ROOT);
-            if (!Set.of("CUBE", "SLAB", "STAIRS", "CROSS").contains(shape)) {
-                plugin.getLogger().warning("[" + id + "] shape invalide '" + shape + "' (CUBE, SLAB, STAIRS ou CROSS) : CUBE utilisé.");
+            if (shape.equals("STAIRS")) {
+                plugin.getLogger().warning("[" + id + "] shape STAIRS non supportée (aucun bloc vanilla inobtenable n'a la forme d'un escalier) : bloc ignoré.");
+                continue;
+            }
+            if (!Set.of("CUBE", "SLAB", "CROSS").contains(shape)) {
+                plugin.getLogger().warning("[" + id + "] shape invalide '" + shape + "' (CUBE, SLAB ou CROSS) : CUBE utilisé.");
                 shape = "CUBE";
             }
 
@@ -168,14 +170,10 @@ public final class CustomBlockManager {
                 base = Material.PAPER;
                 axis = false;
                 facing = false;
-            } else if (!shape.equals("CUBE")) {
-                // Dalle ou escalier : vrai bloc vanilla réservé, posé et orienté par Minecraft
-                Material reserved = shapes.assign(id, shape.equals("STAIRS"));
-                if (reserved == null) {
-                    plugin.getLogger().severe("[" + id + "] bloc ignoré : plus de matériau réservé pour les " + shape + " (" + ShapeRegistry.describePool() + ").");
-                    continue;
-                }
-                base = reserved;
+            } else if (shape.equals("SLAB")) {
+                // Dalle : collision de dalle de chêne pétrifié (introuvable en survie, rendue invisible par le pack)
+                // + modèle affiché par une entité
+                base = Material.PETRIFIED_OAK_SLAB;
                 axis = false;
                 facing = false;
             } else if (registry.assign(id, axis ? 3 : facing ? 4 : 1) == null) {
@@ -200,7 +198,6 @@ public final class CustomBlockManager {
         }
 
         registry.save();
-        shapes.save();
     }
 
     /** Vérifie, une fois blocs et objets chargés, que chaque drop pointe vers un objet existant. */
@@ -343,19 +340,41 @@ public final class CustomBlockManager {
     public BlockDefinition getDefinitionAt(Block block) {
         Material type = block.getType();
         if (type == Material.NOTE_BLOCK) return getDefinitionOf(block.getBlockData());
-        return definitionOfMaterial(type);
+        if (type == Material.PETRIFIED_OAK_SLAB) {
+            String id = slabIdAt(block);
+            return id == null ? null : definitions.get(id);
+        }
+        return null;
     }
 
     public BlockDefinition getDefinitionOf(BlockData data) {
-        if (data.getMaterial() != Material.NOTE_BLOCK) return definitionOfMaterial(data.getMaterial());
+        if (data.getMaterial() != Material.NOTE_BLOCK) return null;
         BlockStateRegistry.Entry entry = registry.find(data.getAsString());
         return entry == null ? null : definitions.get(entry.id());
     }
 
-    /** Dalles et escaliers custom : le matériau vanilla réservé identifie le bloc. */
-    private BlockDefinition definitionOfMaterial(Material type) {
-        String id = shapes.idOf(type);
-        return id == null ? null : definitions.get(id);
+    public NamespacedKey slabKey() {
+        return new NamespacedKey(plugin, "slab_id");
+    }
+
+    /** ID de la dalle custom posée ici (lu sur l'affichage de la case), ou null. */
+    public String slabIdAt(Block block) {
+        for (org.bukkit.entity.Entity entity : slabEntities(block)) {
+            String id = entity.getPersistentDataContainer().get(slabKey(), PersistentDataType.STRING);
+            if (id != null) return id;
+        }
+        return null;
+    }
+
+    public List<org.bukkit.entity.Entity> slabEntities(Block block) {
+        List<org.bukkit.entity.Entity> result = new ArrayList<>();
+        Location center = block.getLocation().add(0.5, 0.5, 0.5);
+        for (org.bukkit.entity.Entity entity : block.getWorld().getNearbyEntities(center, 0.3, 0.3, 0.3)) {
+            if (entity.getPersistentDataContainer().has(slabKey(), PersistentDataType.STRING)) {
+                result.add(entity);
+            }
+        }
+        return result;
     }
 
     public boolean isCustomBlock(Block block) {
@@ -418,6 +437,11 @@ public final class CustomBlockManager {
     public boolean removeBlock(Block block, ItemStack tool, boolean dropItems) {
         BlockDefinition def = getDefinitionAt(block);
         if (def == null) return false;
+
+        if (def.shape().equals("SLAB")) {
+            // Le modèle affiché disparaît avec la dalle
+            for (org.bukkit.entity.Entity entity : slabEntities(block)) entity.remove();
+        }
 
         if (dropItems) {
             // Une dalle double lâche deux exemplaires, comme en vanilla

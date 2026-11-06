@@ -112,15 +112,15 @@ public final class ResourcePackManager {
                 // ---- Blocs : vrais états de note_block, modèle cube avec une texture par face ----
                 Map<String, String> stateModels = new LinkedHashMap<>();
                 Map<String, String> shapeStates = new LinkedHashMap<>();
+                String slabParticle = null;
                 for (CustomBlockManager.BlockDefinition def : definitions) {
                     if (def.textures().isEmpty()) continue;
 
                     String id = def.id();
                     List<String> states = registry.statesOf(id);
-                    boolean stairs = "STAIRS".equals(def.shape());
                     boolean slab = "SLAB".equals(def.shape());
                     boolean cross = "CROSS".equals(def.shape());
-                    if (states.isEmpty() && !stairs && !slab && !cross) continue;
+                    if (states.isEmpty() && !slab && !cross) continue;
 
                     Map<String, String> resourceByFile = new LinkedHashMap<>();
                     Map<String, String> resourceByFace = new LinkedHashMap<>();
@@ -150,35 +150,30 @@ public final class ResourcePackManager {
                         textures.append(",\"").append(face).append("\":\"")
                                 .append(namespace).append(":block/").append(resourceByFace.get(face)).append("\"");
                     }
-                    if (!stairs && !cross) {
+                    if (!cross) {
                         addEntry(zip, "assets/" + namespace + "/models/block/" + id + ".json",
                                 ("{\"parent\":\"minecraft:block/cube\",\"textures\":{" + textures + "}}")
                                         .getBytes(StandardCharsets.UTF_8));
                     }
                     String itemTarget = namespace + ":block/" + id;
 
-                    if (stairs || slab) {
-                        // Dalles et escaliers : modèles vanilla (stairs, inner_stairs, outer_stairs, slab, slab_top)
+                    if (slab) {
+                        // Dalle : modèles vanilla slab / slab_top ; le bloc de collision est rendu invisible plus bas
                         String shapeTextures = "{\"particle\":\"" + namespace + ":block/" + resourceByFace.get("north")
                                 + "\",\"bottom\":\"" + namespace + ":block/" + resourceByFace.get("down")
                                 + "\",\"top\":\"" + namespace + ":block/" + resourceByFace.get("up")
                                 + "\",\"side\":\"" + namespace + ":block/" + resourceByFace.get("north") + "\"}";
-                        String vanillaBlockstate = def.baseMaterial().name().toLowerCase(Locale.ROOT);
-                        if (stairs) {
-                            addModel(zip, id + "_stairs", "minecraft:block/stairs", shapeTextures);
-                            addModel(zip, id + "_stairs_inner", "minecraft:block/inner_stairs", shapeTextures);
-                            addModel(zip, id + "_stairs_outer", "minecraft:block/outer_stairs", shapeTextures);
-                            shapeStates.put(vanillaBlockstate, stairsBlockstate(namespace + ":block/" + id + "_stairs"));
-                            itemTarget = namespace + ":block/" + id + "_stairs";
-                        } else {
-                            addModel(zip, id + "_slab", "minecraft:block/slab", shapeTextures);
-                            addModel(zip, id + "_slab_top", "minecraft:block/slab_top", shapeTextures);
-                            shapeStates.put(vanillaBlockstate, "{\"variants\":{"
-                                    + "\"type=bottom\":{\"model\":\"" + namespace + ":block/" + id + "_slab\"},"
-                                    + "\"type=top\":{\"model\":\"" + namespace + ":block/" + id + "_slab_top\"},"
-                                    + "\"type=double\":{\"model\":\"" + namespace + ":block/" + id + "\"}}}");
-                            itemTarget = namespace + ":block/" + id + "_slab";
-                        }
+                        addModel(zip, id + "_slab", "minecraft:block/slab", shapeTextures);
+                        addModel(zip, id + "_slab_top", "minecraft:block/slab_top", shapeTextures);
+                        // Objets affichés sur la dalle posée : dalle du haut et dalle double
+                        addEntry(zip, "assets/" + namespace + "/items/" + id + "_top.json",
+                                ("{\"model\":{\"type\":\"minecraft:model\",\"model\":\"" + namespace + ":block/" + id + "_slab_top\"}}")
+                                        .getBytes(StandardCharsets.UTF_8));
+                        addEntry(zip, "assets/" + namespace + "/items/" + id + "_double.json",
+                                ("{\"model\":{\"type\":\"minecraft:model\",\"model\":\"" + namespace + ":block/" + id + "\"}}")
+                                        .getBytes(StandardCharsets.UTF_8));
+                        itemTarget = namespace + ":block/" + id + "_slab";
+                        if (slabParticle == null) slabParticle = namespace + ":block/" + resourceByFace.get("north");
                     }
                     String itemJson = "{\"model\":{\"type\":\"minecraft:model\",\"model\":\"" + itemTarget + "\"}}";
                     if (cross) {
@@ -197,7 +192,7 @@ public final class ResourcePackManager {
                     }
                     addEntry(zip, "assets/" + namespace + "/items/" + id + ".json", itemJson.getBytes(StandardCharsets.UTF_8));
 
-                    if (!stairs && !slab && !cross) {
+                    if (!slab && !cross) {
                         // Variante 0 : bloc normal (ou tronc debout) ; 1 : tronc sur l'axe X ; 2 : tronc sur l'axe Z.
                         // Bloc orienté : variantes 0 à 3 = rotation de 0, 90, 180 et 270 degrés.
                         String model = namespace + ":block/" + id;
@@ -216,6 +211,15 @@ public final class ResourcePackManager {
                         }
                     }
                     count++;
+                }
+                if (slabParticle != null) {
+                    // La dalle de chêne pétrifié (introuvable en survie) devient invisible : seule sa collision reste,
+                    // l'apparence vient du modèle affiché par le plugin.
+                    addEntry(zip, "assets/" + namespace + "/models/block/empty.json",
+                            ("{\"textures\":{\"particle\":\"" + slabParticle + "\"},\"elements\":[]}").getBytes(StandardCharsets.UTF_8));
+                    String empty = "{\"model\":\"" + namespace + ":block/empty\"}";
+                    shapeStates.put("petrified_oak_slab", "{\"variants\":{\"type=bottom\":" + empty
+                            + ",\"type=top\":" + empty + ",\"type=double\":" + empty + "}}");
                 }
                 for (Map.Entry<String, String> entry : shapeStates.entrySet()) {
                     addEntry(zip, "assets/minecraft/blockstates/" + entry.getKey() + ".json",
@@ -354,36 +358,6 @@ public final class ResourcePackManager {
     private void addModel(ZipOutputStream zip, String name, String parent, String texturesJson) throws IOException {
         addEntry(zip, "assets/" + namespace + "/models/block/" + name + ".json",
                 ("{\"parent\":\"" + parent + "\",\"textures\":" + texturesJson + "}").getBytes(StandardCharsets.UTF_8));
-    }
-
-    /** États d'escalier de Minecraft (4 directions, haut/bas, 5 formes de coin) avec les modèles personnalisés. */
-    private static String stairsBlockstate(String straightModel) {
-        String[] facings = {"east", "south", "west", "north"};
-        int[] right = {0, 90, 180, 270};
-        int[] left = {270, 0, 90, 180};
-        String[] shapes = {"straight", "inner_left", "inner_right", "outer_left", "outer_right"};
-
-        StringBuilder json = new StringBuilder("{\"variants\":{");
-        boolean first = true;
-        for (String half : new String[]{"bottom", "top"}) {
-            for (int f = 0; f < 4; f++) {
-                for (String shape : shapes) {
-                    String model = shape.startsWith("inner") ? straightModel + "_inner"
-                            : shape.startsWith("outer") ? straightModel + "_outer" : straightModel;
-                    int y = shape.endsWith("_left") ? left[f] : right[f];
-                    if (half.equals("top") && !shape.equals("straight")) y = (y + 90) % 360;
-
-                    if (!first) json.append(',');
-                    first = false;
-                    json.append("\"facing=").append(facings[f]).append(",half=").append(half)
-                            .append(",shape=").append(shape).append("\":{\"model\":\"").append(model).append('"');
-                    if (half.equals("top")) json.append(",\"x\":180");
-                    if (y != 0) json.append(",\"y\":").append(y);
-                    json.append(",\"uvlock\":true}");
-                }
-            }
-        }
-        return json.append("}}").toString();
     }
 
     private static String noteBlockStates(Map<String, String> customModels) {
