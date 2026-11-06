@@ -158,12 +158,17 @@ public final class CustomBlockManager {
             boolean facing = "FACING".equalsIgnoreCase(orientation);
 
             String shape = s.getString("shape", "CUBE").trim().toUpperCase(Locale.ROOT);
-            if (!Set.of("CUBE", "SLAB", "STAIRS").contains(shape)) {
-                plugin.getLogger().warning("[" + id + "] shape invalide '" + shape + "' (CUBE, SLAB ou STAIRS) : CUBE utilisé.");
+            if (!Set.of("CUBE", "SLAB", "STAIRS", "CROSS").contains(shape)) {
+                plugin.getLogger().warning("[" + id + "] shape invalide '" + shape + "' (CUBE, SLAB, STAIRS ou CROSS) : CUBE utilisé.");
                 shape = "CUBE";
             }
 
-            if (!shape.equals("CUBE")) {
+            if (shape.equals("CROSS")) {
+                // Plante en croix : pas de bloc, un affichage + une boîte de clic posés par le plugin
+                base = Material.PAPER;
+                axis = false;
+                facing = false;
+            } else if (!shape.equals("CUBE")) {
                 // Dalle ou escalier : vrai bloc vanilla réservé, posé et orienté par Minecraft
                 Material reserved = shapes.assign(id, shape.equals("STAIRS"));
                 if (reserved == null) {
@@ -414,12 +419,27 @@ public final class CustomBlockManager {
         BlockDefinition def = getDefinitionAt(block);
         if (def == null) return false;
 
-        if (dropItems && toolAllows(def, tool)) {
-            Location center = block.getLocation().add(0.5, 0.5, 0.5);
-            ThreadLocalRandom random = ThreadLocalRandom.current();
+        if (dropItems) {
+            // Une dalle double lâche deux exemplaires, comme en vanilla
+            int rounds = block.getBlockData() instanceof org.bukkit.block.data.type.Slab slab
+                    && slab.getType() == org.bukkit.block.data.type.Slab.Type.DOUBLE ? 2 : 1;
+            dropItems(def, block.getLocation().add(0.5, 0.5, 0.5), tool, rounds);
+        }
+        return true;
+    }
 
-            boolean silk = tool != null && tool.containsEnchantment(org.bukkit.enchantments.Enchantment.SILK_TOUCH);
+    /**
+     * Fait tomber les drops d'un bloc à un endroit : outil et niveau requis, Toucher de soie, chance et quantités.
+     *
+     * @param tool outil utilisé pour casser (null = pas de vérification, ex. explosion)
+     */
+    public void dropItems(BlockDefinition def, Location center, ItemStack tool, int rounds) {
+        if (!toolAllows(def, tool)) return;
 
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        boolean silk = tool != null && tool.containsEnchantment(org.bukkit.enchantments.Enchantment.SILK_TOUCH);
+
+        for (int round = 0; round < rounds; round++) {
             for (DropDefinition drop : def.drops()) {
                 if (drop.silkTouch() != null && drop.silkTouch() != silk) continue;
                 if (drop.chance() < 100.0 && random.nextDouble() * 100.0 >= drop.chance()) continue;
@@ -430,12 +450,11 @@ public final class CustomBlockManager {
                     if (stack == null) break;
                     int part = Math.min(amount, stack.getMaxStackSize());
                     stack.setAmount(part);
-                    block.getWorld().dropItemNaturally(center, stack);
+                    center.getWorld().dropItemNaturally(center, stack);
                     amount -= part;
                 }
             }
         }
-        return true;
     }
 
     // ------------------------------------------------------------------ objets

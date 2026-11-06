@@ -54,6 +54,9 @@ Sans section `drops`, le bloc se lâche lui-même (désactivable avec `drop-self
   réserve un bloc vanilla peu utilisé (escaliers et dalles de cuivre découpé et de tuf, 10 de chaque) dont l'apparence
   est remplacée par le pack : les vrais blocs de ce type (ex. escalier de cuivre ciré) prennent aussi ton apparence.
   `generated/shape-materials.yml` ne doit jamais être supprimé. Le clic milieu en créatif donne le bloc vanilla réservé.
+- **Plantes en croix** : `shape: CROSS` avec une seule `texture`. La plante se pose sur un sol solide ; elle n'a pas de
+  collision et se casse en un coup (la dureté n'est pas utilisée). Ce n'est pas un bloc mais un modèle posé par le plugin :
+  elle ne peut pas apparaître dans les `plants:` d'un biome pour l'instant, et ne se pose pas avec un dispensateur.
 - **Génération de minerais** : une section `generation` sur un bloc cube crée des filons dans le monde
   (`worlds`, `replace`, `min-y`, `max-y`, `veins-per-chunk`, `vein-size`, `biomes`). Ils apparaissent dans les nouveaux
   chunks ; `/cb ore apply [rayon]` les ajoute dans les chunks déjà explorés (à lancer une seule fois par zone).

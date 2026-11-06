@@ -20,3 +20,4 @@ ruby_leggings.png
 ruby_boots.png
 ruby_layer_1.png
 ruby_layer_2.png
+ruby_flower.png

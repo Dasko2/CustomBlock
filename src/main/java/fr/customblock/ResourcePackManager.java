@@ -119,7 +119,8 @@ public final class ResourcePackManager {
                     List<String> states = registry.statesOf(id);
                     boolean stairs = "STAIRS".equals(def.shape());
                     boolean slab = "SLAB".equals(def.shape());
-                    if (states.isEmpty() && !stairs && !slab) continue;
+                    boolean cross = "CROSS".equals(def.shape());
+                    if (states.isEmpty() && !stairs && !slab && !cross) continue;
 
                     Map<String, String> resourceByFile = new LinkedHashMap<>();
                     Map<String, String> resourceByFace = new LinkedHashMap<>();
@@ -149,7 +150,7 @@ public final class ResourcePackManager {
                         textures.append(",\"").append(face).append("\":\"")
                                 .append(namespace).append(":block/").append(resourceByFace.get(face)).append("\"");
                     }
-                    if (!stairs) {
+                    if (!stairs && !cross) {
                         addEntry(zip, "assets/" + namespace + "/models/block/" + id + ".json",
                                 ("{\"parent\":\"minecraft:block/cube\",\"textures\":{" + textures + "}}")
                                         .getBytes(StandardCharsets.UTF_8));
@@ -179,11 +180,24 @@ public final class ResourcePackManager {
                             itemTarget = namespace + ":block/" + id + "_slab";
                         }
                     }
-                    addEntry(zip, "assets/" + namespace + "/items/" + id + ".json",
-                            ("{\"model\":{\"type\":\"minecraft:model\",\"model\":\""
-                                    + itemTarget + "\"}}").getBytes(StandardCharsets.UTF_8));
+                    String itemJson = "{\"model\":{\"type\":\"minecraft:model\",\"model\":\"" + itemTarget + "\"}}";
+                    if (cross) {
+                        // Plante : icône plate dans l'inventaire / en main, modèle en croix une fois posée (affichage)
+                        String res = resourceByFace.get("north");
+                        addModel(zip, id + "_cross", "minecraft:block/cross",
+                                "{\"cross\":\"" + namespace + ":block/" + res + "\"}");
+                        addEntry(zip, "assets/" + namespace + "/models/item/" + id + ".json",
+                                ("{\"parent\":\"minecraft:item/generated\",\"textures\":{\"layer0\":\""
+                                        + namespace + ":block/" + res + "\"}}").getBytes(StandardCharsets.UTF_8));
+                        itemJson = "{\"model\":{\"type\":\"minecraft:select\",\"property\":\"minecraft:display_context\","
+                                + "\"cases\":[{\"when\":[\"gui\",\"ground\",\"fixed\",\"thirdperson_righthand\",\"thirdperson_lefthand\","
+                                + "\"firstperson_righthand\",\"firstperson_lefthand\",\"head\"],"
+                                + "\"model\":{\"type\":\"minecraft:model\",\"model\":\"" + namespace + ":item/" + id + "\"}}],"
+                                + "\"fallback\":{\"type\":\"minecraft:model\",\"model\":\"" + namespace + ":block/" + id + "_cross\"}}}";
+                    }
+                    addEntry(zip, "assets/" + namespace + "/items/" + id + ".json", itemJson.getBytes(StandardCharsets.UTF_8));
 
-                    if (!stairs && !slab) {
+                    if (!stairs && !slab && !cross) {
                         // Variante 0 : bloc normal (ou tronc debout) ; 1 : tronc sur l'axe X ; 2 : tronc sur l'axe Z.
                         // Bloc orienté : variantes 0 à 3 = rotation de 0, 90, 180 et 270 degrés.
                         String model = namespace + ":block/" + id;

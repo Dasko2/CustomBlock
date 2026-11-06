@@ -135,6 +135,13 @@ blocks:
       ingredients:
         M: marble_bricks
 
+  # Plante en croix : pas de bloc, un modèle posé par le plugin (sans collision, un coup pour la casser).
+  # Se pose sur un sol solide, éclairée comme l'air autour d'elle.
+  ruby_flower:
+    shape: CROSS
+    name: "<red>Fleur de rubis"
+    texture: ruby_flower.png
+
   marble_slab:
     shape: SLAB
     name: "<white>Dalle en marbre"
