@@ -49,7 +49,8 @@ Sans section `drops`, le bloc se lâche lui-même (désactivable avec `drop-self
 - **Textures** : `texture: x.png` (6 faces identiques), `top/bottom/side`, ou `up/down/north/south/east/west`.
 - **Troncs** : `orientation: AXIS` : le bloc se pose debout ou couché selon la face cliquée (`top`/`bottom` = bouts, `side` = écorce).
 - **Orientation `FACING`** : le bloc se tourne pour que sa face avant (la face `north` de la texture) soit face au joueur.
-- **Escaliers et dalles** : `shape: STAIRS` ou `shape: SLAB`. Ce sont de vrais escaliers et dalles vanilla : coins,
+- **Escaliers et dalles (à éviter pour l'instant)** : cette forme réutilise des blocs vanilla, dont l'apparence change donc aussi en survie. Une solution sans bloc vanilla est en cours de définition.
+  Fonctionnement actuel : `shape: STAIRS` ou `shape: SLAB`. Ce sont de vrais escaliers et dalles vanilla : coins,
   collision, eau et éclairage sont gérés par Minecraft. `top`, `bottom` et `side` donnent les textures. Chaque forme
   réserve un bloc vanilla peu utilisé (escaliers et dalles de cuivre découpé et de tuf, 10 de chaque) dont l'apparence
   est remplacée par le pack : les vrais blocs de ce type (ex. escalier de cuivre ciré) prennent aussi ton apparence.
@@ -138,6 +139,9 @@ ajouté automatiquement au pack) et `break-particle: CRIT 15` (particule et quan
 bloc-note vanilla, ils ne les remplacent pas.
 
 ## Crafts
+
+Les objets et blocs custom ne peuvent pas servir d'ingrédient dans les crafts **vanilla** (un rubis n'est pas un éclat d'améthyste
+pour une longue-vue) ; ils s'utilisent seulement dans tes crafts. Les crafts vanilla ne sont pas modifiés.
 
 Sous-section `recipe` d'un bloc ou d'un objet. Un ingrédient est un ID custom ou un matériau vanilla.
 
