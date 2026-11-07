@@ -151,6 +151,16 @@ blocks:
       ingredients:
         M: marble_bricks
 
+  # Grand bloc : size [x, y, z] (1 à 4 par axe). Occupe tout le volume, se casse d'un coup.
+  big_ruby_block:
+    base-material: REDSTONE_BLOCK
+    size: [2, 2, 2]
+    name: "<red>Gros bloc de rubis"
+    texture: ruby_block_side.png
+    hardness: 8.0
+    tool: PICKAXE
+    min-tier: IRON
+
   # Plante en croix : pas de bloc, un modèle posé par le plugin (sans collision, un coup pour la casser).
   # Se pose sur un sol solide, éclairée comme l'air autour d'elle.
   ruby_flower:

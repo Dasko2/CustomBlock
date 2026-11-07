@@ -57,6 +57,10 @@ Sans section `drops`, le bloc se lâche lui-même (désactivable avec `drop-self
   du fond est faite de deux petites boîtes de collision invisibles (des shulkers réduits de moitié, sans IA, invulnérables).
   Limites : escaliers **droits uniquement** (pas de coins qui se raccordent), et un coup sur la marche du fond casse
   l'escalier sans temps de minage (la boîte cache le bloc derrière).
+- **Grands blocs** : `size: [2, 2, 2]` (1 à 4 par axe). Le bloc occupe tout le volume, en partant de la case posée vers l'est, le
+  haut et le sud (il faut de la place libre) ; collision, dureté et outil sont ceux d'un vrai bloc, et casser une case
+  casse tout. Une entité affiche le cube agrandi : sa texture est étirée sur tout le volume, et son éclairage est
+  figé au moment de la pose (il ne suit pas le jour et la nuit). Les pistons ne peuvent pas le déplacer.
 - **Plantes en croix** : `shape: CROSS` avec une seule `texture`. La plante se pose sur un sol solide ; elle n'a pas de
   collision et se casse en un coup (la dureté n'est pas utilisée). Ce n'est pas un bloc mais un modèle posé par le plugin :
   elle ne peut pas apparaître dans les `plants:` d'un biome pour l'instant, et ne se pose pas avec un dispensateur.

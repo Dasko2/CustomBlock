@@ -5,7 +5,11 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import io.papermc.paper.event.player.PlayerStonecutterRecipeSelectEvent;
+import org.bukkit.event.block.BlockCookEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
+import org.bukkit.event.inventory.PrepareSmithingEvent;
+import org.bukkit.inventory.Recipe;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
@@ -33,6 +37,42 @@ public final class CraftGuard implements Listener {
         for (ItemStack ingredient : event.getInventory().getMatrix()) {
             if (isCustom(ingredient)) {
                 event.getInventory().setResult(null);
+                return;
+            }
+        }
+    }
+
+    private boolean ours(Recipe recipe) {
+        return recipe instanceof Keyed keyed && keyed.getKey().getNamespace().equals(namespace);
+    }
+
+    /** Four, haut-fourneau, fumoir, feu de camp : un objet custom ne se cuit que par tes crafts. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onCook(BlockCookEvent event) {
+        if (isCustom(event.getSource()) && !ours(event.getRecipe())) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** Table de forgeron. */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onSmithing(PrepareSmithingEvent event) {
+        if (ours(event.getInventory().getRecipe())) return;
+        for (ItemStack ingredient : event.getInventory().getContents()) {
+            if (ingredient != null && ingredient != event.getResult() && isCustom(ingredient)) {
+                event.setResult(null);
+                return;
+            }
+        }
+    }
+
+    /** Tailleur de pierre. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onStonecutter(PlayerStonecutterRecipeSelectEvent event) {
+        if (ours(event.getStonecuttingRecipe())) return;
+        for (ItemStack ingredient : event.getStonecutterInventory().getContents()) {
+            if (isCustom(ingredient)) {
+                event.setCancelled(true);
                 return;
             }
         }

@@ -113,6 +113,7 @@ public final class ResourcePackManager {
                 Map<String, String> stateModels = new LinkedHashMap<>();
                 Map<String, String> shapeStates = new LinkedHashMap<>();
                 String slabParticle = null;
+                boolean petrified = false;
                 for (CustomBlockManager.BlockDefinition def : definitions) {
                     if (def.textures().isEmpty()) continue;
 
@@ -167,6 +168,7 @@ public final class ResourcePackManager {
                         addModel(zip, id + "_stairs", "minecraft:block/stairs", stairTextures);
                         itemTarget = namespace + ":block/" + id + "_stairs";
                         if (slabParticle == null) slabParticle = namespace + ":block/" + resourceByFace.get("north");
+                        petrified = true;
                     }
                     if (slab) {
                         // Dalle : modèles vanilla slab / slab_top ; le bloc de collision est rendu invisible plus bas
@@ -185,6 +187,7 @@ public final class ResourcePackManager {
                                         .getBytes(StandardCharsets.UTF_8));
                         itemTarget = namespace + ":block/" + id + "_slab";
                         if (slabParticle == null) slabParticle = namespace + ":block/" + resourceByFace.get("north");
+                        petrified = true;
                     }
                     String itemJson = "{\"model\":{\"type\":\"minecraft:model\",\"model\":\"" + itemTarget + "\"}}";
                     if (cross) {
@@ -206,7 +209,11 @@ public final class ResourcePackManager {
                     if (!slab && !stairs && !cross) {
                         // Variante 0 : bloc normal (ou tronc debout) ; 1 : tronc sur l'axe X ; 2 : tronc sur l'axe Z.
                         // Bloc orienté : variantes 0 à 3 = rotation de 0, 90, 180 et 270 degrés.
-                        String model = namespace + ":block/" + id;
+                        // Grand bloc : les cases sont invisibles, le modèle agrandi est affiché par une entité
+                        if (def.size() != null && slabParticle == null) {
+                            slabParticle = namespace + ":block/" + resourceByFace.get("north");
+                        }
+                        String model = def.size() != null ? namespace + ":block/empty" : namespace + ":block/" + id;
                         stateModels.put(BlockStateRegistry.variantKey(states.get(0)), "{\"model\":\"" + model + "\"}");
                         if (def.axis() && states.size() >= 3) {
                             stateModels.put(BlockStateRegistry.variantKey(states.get(1)),
@@ -229,7 +236,7 @@ public final class ResourcePackManager {
                     addEntry(zip, "assets/" + namespace + "/models/block/empty.json",
                             ("{\"textures\":{\"particle\":\"" + slabParticle + "\"},\"elements\":[]}").getBytes(StandardCharsets.UTF_8));
                     String empty = "{\"model\":\"" + namespace + ":block/empty\"}";
-                    shapeStates.put("petrified_oak_slab", "{\"variants\":{\"type=bottom\":" + empty
+                    if (petrified) shapeStates.put("petrified_oak_slab", "{\"variants\":{\"type=bottom\":" + empty
                             + ",\"type=top\":" + empty + ",\"type=double\":" + empty + "}}");
                 }
                 for (Map.Entry<String, String> entry : shapeStates.entrySet()) {

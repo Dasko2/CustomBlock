@@ -62,6 +62,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
 
         getServer().getPluginManager().registerEvents(new PlantManager(this, manager), this);
         getServer().getPluginManager().registerEvents(new SlabManager(this, manager), this);
+        getServer().getPluginManager().registerEvents(new BigBlockManager(manager), this);
         getServer().getPluginManager().registerEvents(new CraftGuard(this), this);
 
         this.effectManager = new EffectManager(this);

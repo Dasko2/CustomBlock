@@ -6,6 +6,7 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
@@ -55,6 +56,7 @@ public final class CustomBlockManager {
      * @param drops    objets lâchés à la casse
      * @param shape    CUBE, SLAB (dalle), STAIRS (escalier) : collision de dalle de chêne pétrifié + modèle affiché ou CROSS (plante)
      * @param facing   true = le bloc se tourne face au joueur (4 états)
+     * @param size     bloc plus grand que 1x1x1 : dimensions {x, y, z} (null = taille normale)
      */
     public record BlockDefinition(
             String id,
@@ -69,7 +71,8 @@ public final class CustomBlockManager {
             int minTier,
             List<DropDefinition> drops,
             String shape,
-            boolean facing
+            boolean facing,
+            int[] size
     ) {
     }
 
@@ -155,6 +158,16 @@ public final class CustomBlockManager {
             boolean axis = "AXIS".equalsIgnoreCase(orientation);
             boolean facing = "FACING".equalsIgnoreCase(orientation);
 
+            int[] size = null;
+            List<Integer> sizeRaw = s.getIntegerList("size");
+            if (sizeRaw.size() == 3) {
+                int[] candidate = {Math.max(1, Math.min(4, sizeRaw.get(0))), Math.max(1, Math.min(4, sizeRaw.get(1))),
+                        Math.max(1, Math.min(4, sizeRaw.get(2)))};
+                if (candidate[0] * candidate[1] * candidate[2] > 1) size = candidate;
+            } else if (s.contains("size")) {
+                plugin.getLogger().warning("[" + id + "] size doit être une liste de 3 nombres [x, y, z] : ignoré.");
+            }
+
             String shape = s.getString("shape", "CUBE").trim().toUpperCase(Locale.ROOT);
             if (!Set.of("CUBE", "SLAB", "STAIRS", "CROSS").contains(shape)) {
                 plugin.getLogger().warning("[" + id + "] shape invalide '" + shape + "' (CUBE, SLAB, STAIRS ou CROSS) : CUBE utilisé.");
@@ -172,6 +185,14 @@ public final class CustomBlockManager {
                 base = Material.PETRIFIED_OAK_SLAB;
                 axis = false;
                 facing = false;
+            } else if (size != null && (axis || facing)) {
+                plugin.getLogger().warning("[" + id + "] size est incompatible avec orientation : orientation ignorée.");
+                axis = false;
+                facing = false;
+                if (registry.assign(id, 1) == null) {
+                    plugin.getLogger().severe("[" + id + "] bloc ignoré : plus d'états disponibles.");
+                    continue;
+                }
             } else if (registry.assign(id, axis ? 3 : facing ? 4 : 1) == null) {
                 plugin.getLogger().severe("[" + id + "] bloc ignoré : plus d'états disponibles.");
                 continue;
@@ -190,7 +211,8 @@ public final class CustomBlockManager {
                     minTier,
                     parseDrops(id, s),
                     shape,
-                    facing));
+                    facing,
+                    shape.equals("CUBE") ? size : null));
         }
 
         registry.save();
@@ -371,6 +393,37 @@ public final class CustomBlockManager {
         return null;
     }
 
+    /** Grand bloc : l'affichage qui contient l'origine et la taille de la structure. */
+    public record BigInfo(org.bukkit.entity.Entity display, int ox, int oy, int oz, int sx, int sy, int sz) {
+        public boolean contains(Block b) {
+            return b.getX() >= ox && b.getX() < ox + sx && b.getY() >= oy && b.getY() < oy + sy
+                    && b.getZ() >= oz && b.getZ() < oz + sz;
+        }
+    }
+
+    public NamespacedKey bigKey() {
+        return new NamespacedKey(plugin, "big_block");
+    }
+
+    /** Structure de grand bloc dont cette case fait partie, ou null. Valeur stockée : "ox,oy,oz,sx,sy,sz". */
+    public BigInfo findBig(Block cell) {
+        Location center = cell.getLocation().add(0.5, 0.5, 0.5);
+        for (org.bukkit.entity.Entity entity : cell.getWorld().getNearbyEntities(center, 4.5, 4.5, 4.5)) {
+            String raw = entity.getPersistentDataContainer().get(bigKey(), PersistentDataType.STRING);
+            if (raw == null) continue;
+            String[] p = raw.split(",");
+            if (p.length != 6) continue;
+            try {
+                BigInfo info = new BigInfo(entity, Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]),
+                        Integer.parseInt(p[3]), Integer.parseInt(p[4]), Integer.parseInt(p[5]));
+                if (info.contains(cell)) return info;
+            } catch (NumberFormatException ignored) {
+                // entité corrompue : ignorée
+            }
+        }
+        return null;
+    }
+
     /** Toutes les entités (affichage, boîtes de collision) qui appartiennent à ce bloc. */
     public List<org.bukkit.entity.Entity> slabEntities(Block block) {
         List<org.bukkit.entity.Entity> result = new ArrayList<>();
@@ -443,6 +496,23 @@ public final class CustomBlockManager {
     public boolean removeBlock(Block block, ItemStack tool, boolean dropItems) {
         BlockDefinition def = getDefinitionAt(block);
         if (def == null) return false;
+
+        if (def.size() != null) {
+            // Grand bloc : toutes les cases et le modèle affiché disparaissent ensemble
+            BigInfo info = findBig(block);
+            if (info != null) {
+                World world = block.getWorld();
+                for (int x = info.ox(); x < info.ox() + info.sx(); x++) {
+                    for (int y = info.oy(); y < info.oy() + info.sy(); y++) {
+                        for (int z = info.oz(); z < info.oz() + info.sz(); z++) {
+                            Block cell = world.getBlockAt(x, y, z);
+                            if (!cell.equals(block) && getDefinitionAt(cell) == def) cell.setType(Material.AIR, false);
+                        }
+                    }
+                }
+                info.display().remove();
+            }
+        }
 
         if (def.shape().equals("SLAB") || def.shape().equals("STAIRS")) {
             // Le modèle affiché et les boîtes de collision disparaissent avec le bloc
