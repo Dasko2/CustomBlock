@@ -38,6 +38,11 @@ public final class Main extends JavaPlugin implements TabExecutor {
     private OreManager oreManager;
     private AutoReloader autoReloader;
     private EffectManager effectManager;
+    private ClientModManager clientMod;
+
+    public ClientModManager getClientMod() {
+        return clientMod;
+    }
 
     @Override
     public void onEnable() {
@@ -46,6 +51,8 @@ public final class Main extends JavaPlugin implements TabExecutor {
         this.itemManager = new CustomItemManager(this);
         this.manager = new CustomBlockManager(this, itemManager);
         this.packManager = new ResourcePackManager(this);
+        this.clientMod = new ClientModManager(this, manager);
+        manager.setClientMod(clientMod);
         this.recipeManager = new RecipeManager(this, manager);
         this.biomeManager = new BiomeManager(this, manager);
         this.oreManager = new OreManager(this, manager);
@@ -64,6 +71,9 @@ public final class Main extends JavaPlugin implements TabExecutor {
         getServer().getPluginManager().registerEvents(new SlabManager(this, manager), this);
         getServer().getPluginManager().registerEvents(new BigBlockManager(manager), this);
         getServer().getPluginManager().registerEvents(new CraftGuard(this), this);
+        getServer().getPluginManager().registerEvents(clientMod, this);
+        getServer().getMessenger().registerIncomingPluginChannel(this, ClientModManager.HELLO, clientMod);
+        getServer().getMessenger().registerOutgoingPluginChannel(this, ClientModManager.SYNC);
 
         this.effectManager = new EffectManager(this);
         effectManager.load();
@@ -165,6 +175,7 @@ public final class Main extends JavaPlugin implements TabExecutor {
     /** Recharge blocs, objets et resource pack depuis la configuration. */
     private void reloadAll() {
         manager.load();
+        clientMod.loadSlots(manager.getDefinitions().values());
         itemManager.load(manager.getDefinitions().keySet());
         manager.validateDrops();
         biomeManager.load();

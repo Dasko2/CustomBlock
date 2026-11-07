@@ -182,7 +182,8 @@ public final class CustomBlockManager {
             } else if (shape.equals("SLAB") || shape.equals("STAIRS")) {
                 // Dalle : collision de dalle de chêne pétrifié (introuvable en survie, rendue invisible par le pack)
                 // + modèle affiché par une entité
-                base = Material.PETRIFIED_OAK_SLAB;
+                base = shape.equals("STAIRS") && plugin.getConfig().getBoolean("client-mod.enabled", false)
+                        ? ClientModManager.baseMaterial() : Material.PETRIFIED_OAK_SLAB;
                 axis = false;
                 facing = false;
             } else if (size != null && (axis || facing)) {
@@ -362,7 +363,17 @@ public final class CustomBlockManager {
             String id = slabIdAt(block);
             return id == null ? null : definitions.get(id);
         }
+        if (clientMod != null && clientMod.active() && org.bukkit.Tag.STAIRS.isTagged(type)) {
+            String id = clientMod.idAt(block);
+            return id == null ? null : definitions.get(id);
+        }
         return null;
+    }
+
+    private ClientModManager clientMod;
+
+    public void setClientMod(ClientModManager clientMod) {
+        this.clientMod = clientMod;
     }
 
     public BlockDefinition getDefinitionOf(BlockData data) {
@@ -517,6 +528,7 @@ public final class CustomBlockManager {
         if (def.shape().equals("SLAB") || def.shape().equals("STAIRS")) {
             // Le modèle affiché et les boîtes de collision disparaissent avec le bloc
             for (org.bukkit.entity.Entity entity : slabEntities(block)) entity.remove();
+            if (clientMod != null && def.shape().equals("STAIRS")) clientMod.untrack(block);
         }
 
         if (dropItems) {

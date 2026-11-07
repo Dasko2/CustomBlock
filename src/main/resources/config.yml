@@ -15,6 +15,12 @@
 # états de bloc-note, accorder un bloc-note vanilla pourrait lui donner l'apparence d'un bloc custom.
 # true = surveille config.yml et textures/ : toute modification recharge le plugin toute seule (~2 s)
 # et renvoie le pack aux joueurs seulement s'il a changé.
+# Mode mod client (optionnel) : avec le mod « CustomBlock Client » installé par les joueurs, les escaliers custom
+# deviennent de vrais escaliers (coins, contours, lumière). Sans le mod, ils voient un escalier de chêne vanilla.
+# Les escaliers posés avant l'activation ne sont pas convertis. Redémarrer le serveur après modification.
+client-mod:
+  enabled: false
+
 auto-reload: true
 
 disable-note-tuning: true

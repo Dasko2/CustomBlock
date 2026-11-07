@@ -47,6 +47,7 @@ public final class SlabManager implements Listener {
         CustomBlockManager.BlockDefinition def = manager.getDefinition(event.getItemInHand());
         if (def == null || !(def.shape().equals("SLAB") || def.shape().equals("STAIRS"))) return;
 
+        if (def.shape().equals("STAIRS") && plugin.getConfig().getBoolean("client-mod.enabled", false)) return; // mode mod client
         Block placed = event.getBlockPlaced();
         if (placed.getType() != Material.PETRIFIED_OAK_SLAB || !(placed.getBlockData() instanceof Slab slab)) return;
 

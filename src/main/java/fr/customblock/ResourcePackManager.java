@@ -65,6 +65,38 @@ public final class ResourcePackManager {
         this.namespace = plugin.getName().toLowerCase(Locale.ROOT);
     }
 
+    /** Blockstate d'un bloc d'escalier complet (mêmes propriétés et rotations que les escaliers vanilla). */
+    private String stairsBlockstate(String id) {
+        String straight = namespace + ":block/" + id + "_stairs";
+        String inner = straight + "_inner";
+        String outer = straight + "_outer";
+        String[] facings = {"east", "south", "west", "north"};
+        StringBuilder json = new StringBuilder("{\"variants\":{");
+        boolean first = true;
+        for (int f = 0; f < 4; f++) {
+            int base = f * 90;
+            for (String half : new String[]{"bottom", "top"}) {
+                boolean top = half.equals("top");
+                String x = top ? ",\"x\":180" : "";
+                // bas : droit/coin à droite = rotation de base, coin à gauche = base - 90 ; haut : décalé de 90
+                String[][] shapes = {
+                        {"straight", straight, String.valueOf(base)},
+                        {"inner_right", inner, String.valueOf((base + (top ? 90 : 0)) % 360)},
+                        {"inner_left", inner, String.valueOf((base + (top ? 0 : 270)) % 360)},
+                        {"outer_right", outer, String.valueOf((base + (top ? 90 : 0)) % 360)},
+                        {"outer_left", outer, String.valueOf((base + (top ? 0 : 270)) % 360)}};
+                for (String[] shape : shapes) {
+                    if (!first) json.append(',');
+                    first = false;
+                    json.append("\"facing=").append(facings[f]).append(",half=").append(half).append(",shape=")
+                            .append(shape[0]).append("\":{\"model\":\"").append(shape[1]).append("\",\"y\":")
+                            .append(shape[2]).append(x).append(",\"uvlock\":true}");
+                }
+            }
+        }
+        return json.append("}}").toString();
+    }
+
     /** SHA-1 du pack courant en hexadécimal (chaîne vide s'il n'y a pas de pack). */
     public String getSha1Hex() {
         byte[] sha = packSha1;
@@ -167,8 +199,17 @@ public final class ResourcePackManager {
                                 + "\",\"side\":\"" + namespace + ":block/" + resourceByFace.get("north") + "\"}";
                         addModel(zip, id + "_stairs", "minecraft:block/stairs", stairTextures);
                         itemTarget = namespace + ":block/" + id + "_stairs";
-                        if (slabParticle == null) slabParticle = namespace + ":block/" + resourceByFace.get("north");
-                        petrified = true;
+                        Integer slot = plugin.getClientMod() == null ? null : plugin.getClientMod().slots().get(id);
+                        if (plugin.getClientMod() != null && plugin.getClientMod().active() && slot != null) {
+                            // Mode mod client : bloc d'escalier complet (coins compris) déclaré par le mod
+                            addModel(zip, id + "_stairs_inner", "minecraft:block/inner_stairs", stairTextures);
+                            addModel(zip, id + "_stairs_outer", "minecraft:block/outer_stairs", stairTextures);
+                            addEntry(zip, "assets/" + namespace + "/blockstates/stairs_" + slot + ".json",
+                                    stairsBlockstate(id).getBytes(StandardCharsets.UTF_8));
+                        } else {
+                            if (slabParticle == null) slabParticle = namespace + ":block/" + resourceByFace.get("north");
+                            petrified = true;
+                        }
                     }
                     if (slab) {
                         // Dalle : modèles vanilla slab / slab_top ; le bloc de collision est rendu invisible plus bas
