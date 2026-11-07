@@ -204,7 +204,6 @@ public final class ClientModManager implements Listener, PluginMessageListener {
 
     private void sendChunk(Player player, Chunk chunk) {
         Map<String, String> map = read(chunk);
-        if (map.isEmpty()) return;
         List<Entry> entries = new ArrayList<>();
         boolean dirty = false;
         World world = chunk.getWorld();
@@ -227,7 +226,7 @@ public final class ClientModManager implements Listener, PluginMessageListener {
             }
         }
         if (dirty) write(chunk, map);
-        send(player, encodeSet(entries));
+        send(player, encodeChunk(chunk.getX(), chunk.getZ(), entries));
     }
 
     private void broadcastSet(Chunk chunk, List<Entry> entries) {
@@ -255,6 +254,27 @@ public final class ClientModManager implements Listener, PluginMessageListener {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
             out.writeByte(TYPE_SET);
+            out.writeInt(entries.size());
+            for (Entry e : entries) {
+                out.writeInt(e.x());
+                out.writeInt(e.y());
+                out.writeInt(e.z());
+                out.writeShort(e.slot());
+            }
+            return bytes.toByteArray();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Contenu complet d'un chunk (remplace ce que le client connaît de ce chunk). */
+    private byte[] encodeChunk(int cx, int cz, List<Entry> entries) {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeByte(3);
+            out.writeInt(cx);
+            out.writeInt(cz);
             out.writeInt(entries.size());
             for (Entry e : entries) {
                 out.writeInt(e.x());

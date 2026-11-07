@@ -263,3 +263,12 @@ api.createItem("ruby_sword", 1);  // l'item prêt à donner
 
 Le workflow GitHub Actions compile à chaque push (Gradle, Java 25) et publie le `.jar` dans les artefacts du run.
 En local : `gradle build`, le jar est dans `build/libs/`.
+
+## Mod client optionnel (escaliers parfaits)
+
+Par défaut, les escaliers sont émulés côté serveur (droits uniquement). Avec `client-mod.enabled: true` et le mod
+**CustomBlock Client** (Fabric, dossier `mod/`, jar produit par la CI : artefact `CustomBlock-Client`) installé par les
+joueurs, le serveur pose de vrais escaliers vanilla (coins, orientation, eau) et envoie leurs positions au mod, qui les
+affiche avec le modèle du resource pack. Sans le mod, un joueur voit un escalier de chêne. Les escaliers déjà posés
+avant l'activation ne sont pas convertis ; `generated/stairs-slots.yml` ne doit jamais être supprimé. Maximum 40 escaliers
+différents (limite des identifiants d'états du client).

@@ -1,0 +1,19 @@
+{
+	"schemaVersion": 1,
+	"id": "customblock_client",
+	"version": "${version}",
+	"name": "CustomBlock Client",
+	"description": "Mod client optionnel du plugin CustomBlock : affiche de vrais escaliers custom (coins, contours, lumière).",
+	"authors": ["Dasko2_0"],
+	"license": "CC0-1.0",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["fr.customblock.client.CustomBlockClient"]
+	},
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

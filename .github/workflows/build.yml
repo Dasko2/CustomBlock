@@ -32,3 +32,28 @@ jobs:
           name: CustomBlock
           path: build/libs/CustomBlock-*.jar
           if-no-files-found: error
+
+  mod:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build du mod client
+        run: ./gradlew build --no-daemon
+
+      - name: Upload mod jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomBlock-Client
+          path: mod/build/libs/customblock-client-*.jar
+          if-no-files-found: error
