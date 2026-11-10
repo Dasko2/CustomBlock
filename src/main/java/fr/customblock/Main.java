@@ -206,12 +206,43 @@ public final class Main extends JavaPlugin implements TabExecutor {
                     send(sender, "<red>Cette commande est réservée aux joueurs.");
                     return true;
                 }
-                if (args.length < 2 || !args[1].equalsIgnoreCase("apply")) {
-                    send(sender, "<gray>Usage : <white>/" + label + " biome apply [rayon en chunks]");
+                String sub = args.length < 2 ? "" : args[1].toLowerCase(Locale.ROOT);
+                if (!sub.equals("apply") && !sub.equals("locate") && !sub.equals("tp")) {
+                    send(sender, "<gray>Usage : <white>/" + label + " biome <apply [rayon]|locate [biome]|tp [biome]>");
                     return true;
                 }
                 if (biomeManager.getBiomeCount() == 0) {
                     send(sender, "<yellow>Aucun biome valide n'est défini dans la section 'biomes' de la configuration.");
+                    return true;
+                }
+                if (sub.equals("locate") || sub.equals("tp")) {
+                    var def = biomeManager.find(args.length >= 3 ? args[2] : biomeManager.biomeIds().get(0));
+                    if (def == null) {
+                        send(sender, "<red>Biome inconnu. Biomes : <white><list>",
+                                Placeholder.unparsed("list", String.join(", ", biomeManager.biomeIds())));
+                        return true;
+                    }
+                    int px = player.getLocation().getBlockX();
+                    int pz = player.getLocation().getBlockZ();
+                    int[] found = biomeManager.locate(player.getWorld(), def, px, pz, 4000);
+                    if (found == null) {
+                        send(sender, "<yellow>Aucune zone de <white><id></white> trouvée dans un rayon de 4000 blocs.",
+                                Placeholder.unparsed("id", def.id()));
+                        return true;
+                    }
+                    int distance = (int) Math.round(Math.sqrt(Math.pow(found[0] - px, 2) + Math.pow(found[1] - pz, 2)));
+                    if (sub.equals("tp")) {
+                        int y = player.getWorld().getHighestBlockYAt(found[0], found[1]) + 1;
+                        player.teleportAsync(new org.bukkit.Location(player.getWorld(), found[0] + 0.5, y, found[1] + 0.5));
+                        send(sender, "<green>Téléporté dans <white><id></white> (<x>, <z>).",
+                                Placeholder.unparsed("id", def.id()), Placeholder.unparsed("x", String.valueOf(found[0])),
+                                Placeholder.unparsed("z", String.valueOf(found[1])));
+                    } else {
+                        send(sender, "<green><id></green> : zone la plus proche en <white><x>, <z></white> (à <d> blocs). "
+                                        + "<click:run_command:'/" + label + " biome tp " + def.id() + "'><aqua>[Se téléporter]</aqua></click>",
+                                Placeholder.unparsed("id", def.id()), Placeholder.unparsed("x", String.valueOf(found[0])),
+                                Placeholder.unparsed("z", String.valueOf(found[1])), Placeholder.unparsed("d", String.valueOf(distance)));
+                    }
                     return true;
                 }
                 int radius = 3;
@@ -396,7 +427,13 @@ public final class Main extends JavaPlugin implements TabExecutor {
         } else if (args.length == 2 && args[0].equalsIgnoreCase("ore")) {
             if ("apply".startsWith(args[1].toLowerCase(Locale.ROOT))) result.add("apply");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("biome")) {
-            if ("apply".startsWith(args[1].toLowerCase(Locale.ROOT))) result.add("apply");
+            for (String sub : List.of("apply", "locate", "tp")) {
+                if (sub.startsWith(args[1].toLowerCase(Locale.ROOT))) result.add(sub);
+            }
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("biome") && !args[1].equalsIgnoreCase("apply")) {
+            for (String id : biomeManager.biomeIds()) {
+                if (id.startsWith(args[2].toLowerCase(Locale.ROOT))) result.add(id);
+            }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("pack")) {
             if ("send".startsWith(args[1].toLowerCase(Locale.ROOT))) result.add("send");
         } else if (args.length == 3 && args[0].equalsIgnoreCase("give")) {

@@ -194,7 +194,7 @@ blocks:
     tool: SHOVEL
 
   ruby_log:
-    base-material: OAK_LOG
+    base-material: MUSHROOM_STEM   # matériau sans craft vanilla : tes crafts passent avant ceux de la bûche de chêne
     name: "<#c0405a>Bûche de Rubis"
     orientation: AXIS          # se pose debout ou couchée selon la face cliquée
     textures:
@@ -203,6 +203,48 @@ blocks:
       side: ruby_log_side.png
     hardness: 2.0
     tool: AXE
+
+  # Planches de rubis. Le matériau de base n'a aucun craft vanilla, pour que les crafts ci-dessous s'appliquent.
+  ruby_planks:
+    base-material: BROWN_MUSHROOM_BLOCK
+    name: "<#c0405a>Planches de Rubis"
+    texture: ruby_planks.png
+    hardness: 2.0
+    tool: AXE
+    recipe:
+      type: shapeless
+      amount: 4
+      ingredients: [ruby_log]
+
+  ruby_planks_slab:
+    shape: SLAB
+    name: "<#c0405a>Dalle en planches de Rubis"
+    texture: ruby_planks.png
+    hardness: 2.0
+    tool: AXE
+    recipe:
+      type: shaped
+      amount: 6
+      shape:
+        - "PPP"
+      ingredients:
+        P: ruby_planks
+
+  ruby_planks_stairs:
+    shape: STAIRS
+    name: "<#c0405a>Escalier en planches de Rubis"
+    texture: ruby_planks.png
+    hardness: 2.0
+    tool: AXE
+    recipe:
+      type: shaped
+      amount: 4
+      shape:
+        - "P  "
+        - "PP "
+        - "PPP"
+      ingredients:
+        P: ruby_planks
 
   ruby_leaves:
     base-material: OAK_LEAVES
@@ -326,6 +368,19 @@ items:
       ingredients:
         R: ruby
         S: STICK
+
+  ruby_stick:
+    material: STICK
+    name: "<#c0405a>Bâton de Rubis"
+    texture: ruby_stick.png
+    recipe:
+      type: shaped
+      amount: 4
+      shape:
+        - "P"
+        - "P"
+      ingredients:
+        P: ruby_planks
 
   ruby_pickaxe:
     material: DIAMOND_PICKAXE

@@ -407,6 +407,56 @@ public final class BiomeManager implements Listener {
         return processed;
     }
 
+    public List<String> biomeIds() {
+        List<String> ids = new ArrayList<>();
+        for (BiomeDef def : biomes) ids.add(def.id());
+        return ids;
+    }
+
+    /** Biome défini dans la configuration (id insensible à la casse), ou null. */
+    public BiomeDef find(String id) {
+        for (BiomeDef def : biomes) {
+            if (def.id().equalsIgnoreCase(id)) return def;
+        }
+        return null;
+    }
+
+    /**
+     * Cherche la zone la plus proche d'un biome, en parcourant des anneaux de plus en plus larges autour du point
+     * (sans générer de chunk : le bruit de zone et le biome vanilla d'origine suffisent).
+     *
+     * @return {x, z} d'un point de la zone, ou null si rien n'est trouvé dans le rayon
+     */
+    public int[] locate(World world, BiomeDef def, int centerX, int centerZ, int maxRadius) {
+        if (!def.worlds().contains(world.getName())) return null;
+        WorldRegion region = new WorldRegion(world);
+        double threshold = 1.0 - def.coverage();
+        int step = 24;
+        for (int ring = 0; ring * step <= maxRadius; ring++) {
+            int r = ring * step;
+            int[] best = null;
+            double bestDistance = Double.MAX_VALUE;
+            for (int i = -ring; i <= ring; i++) {
+                int[][] points = ring == 0
+                        ? new int[][]{{0, 0}}
+                        : new int[][]{{i * step, -r}, {i * step, r}, {-r, i * step}, {r, i * step}};
+                for (int[] offset : points) {
+                    int x = centerX + offset[0];
+                    int z = centerZ + offset[1];
+                    if (noise(world.getSeed(), def.id(), x, z, def.scale()) < threshold) continue;
+                    if (!def.vanillaBiomes().isEmpty() && !def.vanillaBiomes().contains(region.biome(x, 64, z))) continue;
+                    double distance = (double) offset[0] * offset[0] + (double) offset[1] * offset[1];
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        best = new int[]{x, z};
+                    }
+                }
+            }
+            if (best != null) return best;
+        }
+        return null;
+    }
+
     private static long chunkKey(int x, int z) {
         return ((long) x << 32) ^ (z & 0xFFFFFFFFL);
     }

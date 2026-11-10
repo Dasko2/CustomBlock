@@ -115,7 +115,8 @@ public final class SlabManager implements Listener {
             case NORTH -> 270;
             default -> 0;
         };
-        Quaternionf rotation = new Quaternionf().rotateY((float) -Math.toRadians(yaw));
+        // L'affichage d'objet retourne le modèle de 180° : on compense pour que la marche basse soit face au joueur
+        Quaternionf rotation = new Quaternionf().rotateY((float) -Math.toRadians(yaw + 180));
         if (top) rotation.rotateX((float) Math.PI);
 
         ItemStack stack = manager.createItem(def, 1);

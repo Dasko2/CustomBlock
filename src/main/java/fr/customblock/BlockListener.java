@@ -160,6 +160,9 @@ public final class BlockListener implements Listener {
         if (!plugin.getConfig().getBoolean("disable-note-tuning", true)) return;
 
         event.setUseInteractedBlock(Event.Result.DENY);
+        if (event.getItem() != null && event.getItem().getType().isBlock()) {
+            event.setUseItemInHand(Event.Result.ALLOW); // on peut poser un bloc contre un bloc custom
+        }
     }
 
     // ------------------------------------------------------------------ minage
