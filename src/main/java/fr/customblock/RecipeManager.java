@@ -61,6 +61,7 @@ public final class RecipeManager {
 
         scan("blocks");
         scan("items");
+        scan("vanilla-recipes");
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             discover(player);

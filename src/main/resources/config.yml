@@ -369,19 +369,6 @@ items:
         R: ruby
         S: STICK
 
-  ruby_stick:
-    material: STICK
-    name: "<#c0405a>Bâton de Rubis"
-    texture: ruby_stick.png
-    recipe:
-      type: shaped
-      amount: 4
-      shape:
-        - "P"
-        - "P"
-      ingredients:
-        P: ruby_planks
-
   ruby_pickaxe:
     material: DIAMOND_PICKAXE
     name: "<red>Pioche de Rubis"
@@ -470,6 +457,21 @@ items:
         - "R R"
       ingredients:
         R: ruby
+
+# ------------------------------------------------------------
+#  CRAFTS D'OBJETS VANILLA : un craft dont le résultat est un objet vanilla, avec des ingrédients custom.
+#  La clé est le matériau obtenu (ex. STICK). Même syntaxe que "recipe" d'un bloc.
+# ------------------------------------------------------------
+vanilla-recipes:
+  stick:
+    recipe:
+      type: shaped
+      amount: 4
+      shape:
+        - "P"
+        - "P"
+      ingredients:
+        P: ruby_planks
 
 # ------------------------------------------------------------
 #  CRAFTS (sous-section "recipe" d'un bloc ou d'un objet)
